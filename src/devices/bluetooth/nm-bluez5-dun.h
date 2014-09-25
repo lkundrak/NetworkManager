@@ -22,6 +22,7 @@
 #define _NM_BLUEZ5_UTILS_H_
 
 #include <glib.h>
+#include <gio/gio.h>
 
 typedef struct _NMBluez5DunContext NMBluez5DunContext;
 
@@ -33,10 +34,7 @@ typedef void (*NMBluez5DunFunc) (NMBluez5DunContext *context,
 
 NMBluez5DunContext *nm_bluez5_dun_new (const char *adapter,
                                        const char *remote,
-                                       int rfcomm_channel,
-                                       NMBluez5DunFunc callback,
-                                       gpointer user_data,
-                                       GError **error);
+                                       GSimpleAsyncResult *simple);
 
 gboolean nm_bluez5_dun_connect (NMBluez5DunContext *context, GError **error);
 

@@ -429,6 +429,7 @@ nm_bluez_device_disconnect (NMBluezDevice *self)
 			dbus_iface = BLUEZ4_SERIAL_INTERFACE;
 		} else if (priv->bluez_version == 5) {
 			nm_bluez5_dun_free (priv->b5_context);
+			priv->connected = FALSE;
 			priv->b5_context = NULL;
 			goto out;
 		}
@@ -527,10 +528,7 @@ nm_bluez_device_connect_async (NMBluezDevice *self,
 			priv->b5_context = nm_bluez5_dun_new (
 				priv->adapter_address,
 				priv->address,
-				-1, /* rfcomm_channel, -1 = scan */
-				callback,
-				user_data,
-				NULL); /* error NOT USED */
+				simple);
 
 			if (!nm_bluez5_dun_connect (priv->b5_context, &local)) {
 				g_simple_async_result_take_error (simple, local);
@@ -560,6 +558,7 @@ nm_bluez_device_connect_finish (NMBluezDevice *self,
                                 GAsyncResult *result,
                                 GError **error)
 {
+	NMBluezDevicePrivate *priv = NM_BLUEZ_DEVICE_GET_PRIVATE (self);
 	GSimpleAsyncResult *simple;
 	const char *device;
 
@@ -574,6 +573,9 @@ nm_bluez_device_connect_finish (NMBluezDevice *self,
 		return NULL;
 
 	device = (const char *) g_simple_async_result_get_op_res_gpointer (simple);
+	if (device && priv->bluez_version == 5)
+		priv->connected = TRUE;
+
 	return device;
 }
 

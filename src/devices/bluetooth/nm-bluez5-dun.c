@@ -43,14 +43,13 @@ typedef struct _NMBluez5DunContext {
 	int rfcomm_fd;
 	int rfcomm_tty_fd;
 	int rfcomm_id;
-	NMBluez5DunFunc callback;
-	gpointer user_data;
+	GSimpleAsyncResult *simple;
 	sdp_session_t *sdp_session;
 	guint sdp_watch_id;
 } NMBluez5DunContext;
 
-static gboolean
-dun_connect (NMBluez5DunContext *context, GError **error)
+static void
+dun_connect (NMBluez5DunContext *context)
 {
 	struct sockaddr_rc sa;
 	int devid, try = 30;
@@ -65,10 +64,11 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 
 	context->rfcomm_fd = socket (AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
 	if (context->rfcomm_fd < 0) {
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "Failed to create RFCOMM socket: (%d) %s",
-		             errno, strerror (errno));
-		return FALSE;
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Failed to create RFCOMM socket: (%d) %s",
+		                                 errno, strerror (errno));
+		return;
 	}
 
 	/* Connect to the remote device */
@@ -76,17 +76,21 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 	sa.rc_channel = 0;
 	memcpy (&sa.rc_bdaddr, &context->src, ETH_ALEN);
 	if (bind (context->rfcomm_fd, (struct sockaddr *) &sa, sizeof(sa))) {
-		nm_log_dbg (LOGD_BT, "(%s): failed to bind socket: (%d) %s",
-		            context->source, errno, strerror (errno));
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Failed to bind socket: (%d) %s",
+		                                 errno, strerror (errno));
+		return;
 	}
 
 	sa.rc_channel = context->rfcomm_channel;
 	memcpy (&sa.rc_bdaddr, &context->dst, ETH_ALEN);
 	if (connect (context->rfcomm_fd, (struct sockaddr *) &sa, sizeof (sa)) ) {
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "Failed to connect to remote device: (%d) %s",
-		             errno, strerror (errno));
-		return FALSE;
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Failed to connect to remote device: (%d) %s",
+		                                 errno, strerror (errno));
+		return;
 	}
 
 	nm_log_dbg (LOGD_BT, "(%s): connected to %s on channel %d",
@@ -97,10 +101,11 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 	memcpy (&req.dst, &context->dst, ETH_ALEN);
 	devid = ioctl (context->rfcomm_fd, RFCOMMCREATEDEV, &req);
 	if (devid < 0) {
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "(%s): failed to create rfcomm device: (%d) %s",
-		             context->source, errno, strerror (errno));
-		return FALSE;
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Failed to create rfcomm device: (%d) %s",
+		                                 errno, strerror (errno));
+		return;
 	}
 	context->rfcomm_id = devid;
 
@@ -111,13 +116,13 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 			continue;
 		}
 
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "(%s): failed to find rfcomm device",
-		             context->source);
-		return FALSE;
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Failed to find rfcomm device: %s",
+		                                 tty);
 	}
 
-	return TRUE;
+	g_simple_async_result_set_op_res_gpointer (context->simple, g_strdup (tty), g_free);
 }
 
 static void
@@ -147,7 +152,9 @@ sdp_search_completed_cb (uint8_t type, uint16_t status, uint8_t *rsp, size_t siz
 
 	/* SDP response received */
 	if (status || type != SDP_SVC_SEARCH_ATTR_RSP) {
-		err = -EPROTO;
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Did not get a Service Discovery response");
 		goto done;
 	}
 
@@ -157,8 +164,13 @@ sdp_search_completed_cb (uint8_t type, uint16_t status, uint8_t *rsp, size_t siz
 	            context->source, context->dest, scanned, seqlen);
 
 	scanned = sdp_extract_seqtype (rsp, bytesleft, &dataType, &seqlen);
-	if (!scanned || !seqlen)
+	if (!scanned || !seqlen) {
+		/* Short read or unknown sequence type */
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Improper Service Discovery response");
 		goto done;
+	}
 
 	rsp += scanned;
 	bytesleft -= scanned;
@@ -194,22 +206,27 @@ sdp_search_completed_cb (uint8_t type, uint16_t status, uint8_t *rsp, size_t siz
 done:
 	if (channel != -1) {
 		context->rfcomm_channel = channel;
-		dun_connect (context, NULL);
+		dun_connect (context);
 	}
 
+	sdp_search_cleanup (context);
+	g_simple_async_result_complete_in_idle (context->simple);
 }
 
 static gboolean
 sdp_search_process_cb (GIOChannel *channel, GIOCondition condition, gpointer user_data)
 {
 	NMBluez5DunContext *context = user_data;
-	int err = 0;
 
 	nm_log_dbg (LOGD_BT, "(%s -> %s): SDP search progressed with condition=%d",
 	            context->source, context->dest, condition);
 
 	if (condition & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)) {
-		err = EIO;
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Service Discovery interrupted");
+		sdp_search_cleanup (context);
+		g_simple_async_result_complete_in_idle (context->simple);
 		return FALSE;
 	}
 
@@ -248,8 +265,21 @@ sdp_connect_watch (GIOChannel *channel, GIOCondition condition, gpointer user_da
 		err = fd_err;
 	}
 
+	if (err != 0) {
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Error on Service Discovery socket: (%d) %s",
+		                                 err, strerror (err));
+		goto done;
+	}
+
 	if (sdp_set_notify (context->sdp_session, sdp_search_completed_cb, context) < 0) {
-		err = -EIO;
+		/* Should not be reached, only can fail if we passed bad sdp_session. */
+		err = -1;
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Could not request Service Discovery notification");
+		goto done;
 	}
 
 	sdp_uuid16_create (&svclass, DIALUP_NET_SVCLASS_ID);
@@ -263,20 +293,30 @@ sdp_connect_watch (GIOChannel *channel, GIOCondition condition, gpointer user_da
 		                                        G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL,
 		                                        sdp_search_process_cb,
 		                                        context);
+	} else {
+		err = sdp_get_error (context->sdp_session);
+		g_simple_async_result_set_error (context->simple, NM_BT_ERROR,
+		                                 NM_BT_ERROR_DUN_CONNECT_FAILED,
+		                                 "Error starting Service Discovery: (%d) %s",
+		                                 err, strerror (err));
 	}
 
 	sdp_list_free (attrs, NULL);
 	sdp_list_free (search, NULL);
+
+done:
+	if (err != 0) {
+		sdp_search_cleanup (context);
+		g_simple_async_result_complete_in_idle (context->simple);
+	}
+
 	return G_SOURCE_REMOVE;
 }
 
 NMBluez5DunContext *
 nm_bluez5_dun_new (const char *adapter,
                    const char *remote,
-                   int rfcomm_channel,
-                   NMBluez5DunFunc callback,
-                   gpointer user_data,
-                   GError **error)
+                   GSimpleAsyncResult *simple)
 {
 	NMBluez5DunContext *context;
 
@@ -285,11 +325,10 @@ nm_bluez5_dun_new (const char *adapter,
 	str2ba (remote, &context->dst);
 	context->source = g_strdup (adapter);
 	context->dest = g_strdup (remote);
-	context->rfcomm_channel = (rfcomm_channel >= 0) ? rfcomm_channel : -1;
+	context->rfcomm_channel = -1;
 	context->rfcomm_id = -1;
 	context->rfcomm_fd = -1;
-	context->callback = callback;
-	context->user_data = user_data;
+	context->simple = simple;
 	return context;
 }
 
