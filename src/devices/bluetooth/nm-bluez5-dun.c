@@ -34,22 +34,11 @@
 #include "nm-logging.h"
 #include "NetworkManagerUtils.h"
 
-static void
-setba (bdaddr_t *dst, const guint8 src[ETH_ALEN])
-{
-	register guint8 *d = (guint8 *) dst;
-	register const guint8 *s = (const guint8 *) src;
-	register int i;
-
-	/* BT MAC addresses get swapped when sending to the kernel */
-	memcpy (dst, src, ETH_ALEN);
-	for (i = 0; i < 6; i++)
-		d[i] = s[5-i];
-}
-
 typedef struct _NMBluez5DunContext {
-	bdaddr_t src[ETH_ALEN];
-	bdaddr_t dst[ETH_ALEN];
+	bdaddr_t src;
+	bdaddr_t dst;
+	char *source;
+	char *dest;
 	int rfcomm_channel;
 	int rfcomm_fd;
 	char *rfcomm_dev;
@@ -86,14 +75,14 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 	/* Connect to the remote device */
 	sa.rc_family = AF_BLUETOOTH;
 	sa.rc_channel = 0;
-	memcpy (&sa.rc_bdaddr, context->src, ETH_ALEN);
+	memcpy (&sa.rc_bdaddr, &context->src, ETH_ALEN);
 	if (bind (context->rfcomm_fd, (struct sockaddr *) &sa, sizeof(sa))) {
-		nm_log_dbg (LOGD_BT, "(" MAC_FMT "): failed to bind socket: (%d) %s",
-		            MAC_ARG (context->src), errno, strerror (errno));
+		nm_log_dbg (LOGD_BT, "(%s): failed to bind socket: (%d) %s",
+		            context->source, errno, strerror (errno));
 	}
 
 	sa.rc_channel = context->rfcomm_channel;
-	memcpy (&sa.rc_bdaddr, context->dst, ETH_ALEN);
+	memcpy (&sa.rc_bdaddr, &context->dst, ETH_ALEN);
 	if (connect (context->rfcomm_fd, (struct sockaddr *) &sa, sizeof (sa)) ) {
 		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
 		             "Failed to connect to remote device: (%d) %s",
@@ -101,17 +90,17 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 		return FALSE;
 	}
 
-	nm_log_dbg (LOGD_BT, "(" MAC_FMT "): connected to " MAC_FMT "on channel %d",
-	            MAC_ARG (context->src), MAC_ARG (context->dst), context->rfcomm_channel);
+	nm_log_dbg (LOGD_BT, "(%s): connected to %s on channel %d",
+	            context->source, context->dest, context->rfcomm_channel);
 
 	/* Create an RFCOMM kernel device for the DUN channel */
-	memcpy (&req.src, context->src, ETH_ALEN);
-	memcpy (&req.dst, context->dst, ETH_ALEN);
+	memcpy (&req.src, &context->src, ETH_ALEN);
+	memcpy (&req.dst, &context->dst, ETH_ALEN);
 	devid = ioctl (context->rfcomm_fd, RFCOMMCREATEDEV, &req);
 	if (devid < 0) {
 		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "(" MAC_FMT "): failed to create rfcomm device: (%d) %s",
-		             MAC_ARG (context->src), errno, strerror (errno));
+		             "(%s): failed to create rfcomm device: (%d) %s",
+		             context->source, errno, strerror (errno));
 		return FALSE;
 	}
 	context->rfcomm_id = devid;
@@ -125,8 +114,8 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 		}
 
 		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "(" MAC_FMT "): failed to find rfcomm device",
-		             MAC_ARG (context->src));
+		             "(%s): failed to find rfcomm device",
+		             context->source);
 		return FALSE;
 	}
 
@@ -152,7 +141,6 @@ static void
 sdp_search_completed_cb (uint8_t type, uint16_t status, uint8_t *rsp, size_t size, void *user_data)
 {
 	NMBluez5DunContext *context = user_data;
-	sdp_list_t *recs = NULL;
 	int scanned, seqlen = 0, bytesleft = size;
 	uint8_t dataType;
 	int channel = -1;
@@ -269,8 +257,8 @@ dun_find_channel (NMBluez5DunContext *context, GError **error)
 	context->sdp_session = sdp_connect (&context->src, &context->dst, SDP_NON_BLOCKING);
 	if (!context->sdp_session) {
 		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "(" MAC_FMT "): failed to connect to the SDP server: (%d) %s",
-		             MAC_ARG (context->src), errno, strerror (errno));
+		             "(%s): failed to connect to the SDP server: (%d) %s",
+		             context->source, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -284,8 +272,8 @@ dun_find_channel (NMBluez5DunContext *context, GError **error)
 }
 
 NMBluez5DunContext *
-nm_bluez5_dun_new (const guint8 adapter[ETH_ALEN],
-                   const guint8 remote[ETH_ALEN],
+nm_bluez5_dun_new (const char *adapter,
+                   const char *remote,
                    int rfcomm_channel,
                    NMBluez5DunFunc callback,
                    gpointer user_data,
@@ -294,8 +282,10 @@ nm_bluez5_dun_new (const guint8 adapter[ETH_ALEN],
 	NMBluez5DunContext *context;
 
 	context = g_slice_new0 (NMBluez5DunContext);
-	setba (context->src, adapter);
-	setba (context->dst, remote);
+	str2ba (adapter, &context->src);
+	str2ba (remote, &context->dst);
+	context->source = g_strdup (adapter);
+	context->dest = g_strdup (remote);
 	context->rfcomm_channel = (rfcomm_channel >= 0) ? rfcomm_channel : -1;
 	context->rfcomm_id = -1;
 	context->rfcomm_fd = -1;
@@ -334,6 +324,12 @@ nm_bluez5_dun_cleanup (NMBluez5DunContext *context)
 		close (context->rfcomm_fd);
 		context->rfcomm_fd = -1;
 	}
+
+	g_free (context->source);
+	context->source = NULL;
+
+	g_free (context->dest);
+	context->dest = NULL;
 }
 
 void

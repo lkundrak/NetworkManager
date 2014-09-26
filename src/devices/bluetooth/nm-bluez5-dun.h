@@ -31,8 +31,8 @@ typedef void (*NMBluez5DunFunc) (NMBluez5DunContext *context,
                                  GError *error,
                                  gpointer user_data);
 
-NMBluez5DunContext *nm_bluez5_dun_new (const guint8 adapter[ETH_ALEN],
-                                       const guint8 remote[ETH_ALEN],
+NMBluez5DunContext *nm_bluez5_dun_new (const char *adapter,
+                                       const char *remote,
                                        int rfcomm_channel,
                                        NMBluez5DunFunc callback,
                                        gpointer user_data,
