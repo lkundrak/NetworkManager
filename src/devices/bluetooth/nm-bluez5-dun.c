@@ -47,7 +47,7 @@ setba (bdaddr_t *dst, const guint8 src[ETH_ALEN])
 		d[i] = s[5-i];
 }
 
-typedef struct {
+typedef struct _NMBluez5DunContext {
 	bdaddr_t src[ETH_ALEN];
 	bdaddr_t dst[ETH_ALEN];
 	int rfcomm_channel;
@@ -59,6 +59,80 @@ typedef struct {
 	sdp_session_t *sdp_session;
 	guint sdp_watch_id;
 } NMBluez5DunContext;
+
+static gboolean
+dun_connect (NMBluez5DunContext *context, GError **error)
+{
+	struct sockaddr_rc sa;
+	struct stat st;
+	int devid, try = 30;
+	char tty[100];
+	const int ttylen = sizeof (tty) - 1;
+
+	struct rfcomm_dev_req req = {
+		.flags = (1 << RFCOMM_REUSE_DLC) | (1 << RFCOMM_RELEASE_ONHUP),
+		.dev_id = -1,
+		.channel = context->rfcomm_channel
+	};
+
+	context->rfcomm_fd = socket (AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+	if (context->rfcomm_fd < 0) {
+		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
+		             "Failed to create RFCOMM socket: (%d) %s",
+		             errno, strerror (errno));
+		return FALSE;
+	}
+
+	/* Connect to the remote device */
+	sa.rc_family = AF_BLUETOOTH;
+	sa.rc_channel = 0;
+	memcpy (&sa.rc_bdaddr, context->src, ETH_ALEN);
+	if (bind (context->rfcomm_fd, (struct sockaddr *) &sa, sizeof(sa))) {
+		nm_log_dbg (LOGD_BT, "(" MAC_FMT "): failed to bind socket: (%d) %s",
+		            MAC_ARG (context->src), errno, strerror (errno));
+	}
+
+	sa.rc_channel = context->rfcomm_channel;
+	memcpy (&sa.rc_bdaddr, context->dst, ETH_ALEN);
+	if (connect (context->rfcomm_fd, (struct sockaddr *) &sa, sizeof (sa)) ) {
+		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
+		             "Failed to connect to remote device: (%d) %s",
+		             errno, strerror (errno));
+		return FALSE;
+	}
+
+	nm_log_dbg (LOGD_BT, "(" MAC_FMT "): connected to " MAC_FMT "on channel %d",
+	            MAC_ARG (context->src), MAC_ARG (context->dst), context->rfcomm_channel);
+
+	/* Create an RFCOMM kernel device for the DUN channel */
+	memcpy (&req.src, context->src, ETH_ALEN);
+	memcpy (&req.dst, context->dst, ETH_ALEN);
+	devid = ioctl (context->rfcomm_fd, RFCOMMCREATEDEV, &req);
+	if (devid < 0) {
+		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
+		             "(" MAC_FMT "): failed to create rfcomm device: (%d) %s",
+		             MAC_ARG (context->src), errno, strerror (errno));
+		return FALSE;
+	}
+	context->rfcomm_id = devid;
+
+	snprintf (tty, ttylen, "/dev/rfcomm%d", devid);
+	while (stat (tty, &st) < 0 && try--) {
+		snprintf (tty, ttylen, "/dev/rfcomm%d", devid);
+		if (try--) {
+			g_usleep (100 * 1000);
+			continue;
+		}
+
+		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
+		             "(" MAC_FMT "): failed to find rfcomm device",
+		             MAC_ARG (context->src));
+		return FALSE;
+	}
+
+	context->rfcomm_dev = g_strdup (tty);
+	return TRUE;
+}
 
 static void
 sdp_search_cleanup (NMBluez5DunContext *context)
@@ -81,7 +155,6 @@ sdp_search_completed_cb (uint8_t type, uint16_t status, uint8_t *rsp, size_t siz
 	sdp_list_t *recs = NULL;
 	int scanned, seqlen = 0, bytesleft = size;
 	uint8_t dataType;
-	int err = 0;
 	int channel = -1;
 
 	if (status || type != SDP_SVC_SEARCH_ATTR_RSP) {
@@ -122,15 +195,11 @@ sdp_search_completed_cb (uint8_t type, uint16_t status, uint8_t *rsp, size_t siz
 	} while ((scanned < (ssize_t) size) && (bytesleft > 0) && (channel < 0));
 
 done:
-	cache_sdp_session(&ctxt->src, &ctxt->dst, ctxt->session);
+	if (channel != -1) {
+		context->rfcomm_channel = channel;
+		dun_connect (context, NULL);
+	}
 
-	if (ctxt->cb)
-		ctxt->cb(recs, err, ctxt->user_data);
-
-	if (recs)
-		sdp_list_free(recs, (sdp_free_func_t) sdp_record_free);
-
-	search_context_cleanup(ctxt);
 }
 
 static gboolean
@@ -141,26 +210,16 @@ sdp_search_process_cb (GIOChannel *channel, GIOCondition condition, gpointer use
 
 	if (condition & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)) {
 		err = EIO;
-		goto failed;
+		return FALSE;
 	}
 
-	if (sdp_process (context->sdp_session) < 0)
-		goto failed;
+	if (sdp_process (context->sdp_session) < 0) {
+		/* Search finished successfully. */
+		return FALSE;
+	}
 
+	/* Search progressed successfully. */
 	return TRUE;
-
-failed:
-	if (err) {
-		sdp_close(ctxt->session);
-		ctxt->session = NULL;
-
-		if (ctxt->cb)
-			ctxt->cb(NULL, err, ctxt->user_data);
-
-		search_context_cleanup(ctxt);
-	}
-
-	return FALSE;
 }
 
 static gboolean
@@ -173,20 +232,15 @@ sdp_connect_watch (GIOChannel *channel, GIOCondition condition, gpointer user_da
 	int fd, err, fd_err = 0;
 	socklen_t len = sizeof (fd_err);
 
-	context->watch_id = 0;
+	context->sdp_watch_id = 0;
 
 	fd = g_io_channel_unix_get_fd (channel);
 	if (getsockopt (fd, SOL_SOCKET, SO_ERROR, &fd_err, &len) < 0)
 		err = -errno;
 	else
 		err = -fd_err;
-
-	if (err != 0)
-		goto failed;
-
-	if (sdp_set_notify (context->sdp_session, sdp_search_completed_cb, ctxt) < 0) {
+	if (sdp_set_notify (context->sdp_session, sdp_search_completed_cb, context) < 0) {
 		err = -EIO;
-		goto failed;
 	}
 
 	sdp_uuid16_create (&svclass, DIALUP_NET_SVCLASS_ID);
@@ -202,7 +256,6 @@ sdp_connect_watch (GIOChannel *channel, GIOCondition condition, gpointer user_da
 		                                        context);
 	}
 
-done:
 	sdp_list_free (attrs, NULL);
 	sdp_list_free (search, NULL);
 	return G_SOURCE_REMOVE;
@@ -230,107 +283,6 @@ dun_find_channel (NMBluez5DunContext *context, GError **error)
 	return TRUE;
 }
 
-	sdp_list_t *srch, *attrs, *rsp;
-	uuid_t svclass;
-	uint16_t attr;
-	int ch = 0;
-
-	sdp_uuid16_create (&svclass, DIALUP_NET_SVCLASS_ID);
-	srch = sdp_list_append (NULL, &svclass);
-	attr = SDP_ATTR_PROTO_DESC_LIST;
-	attrs = sdp_list_append (NULL, &attr);
-
-	if (sdp_service_search_attr_req (s, srch, SDP_ATTR_REQ_INDIVIDUAL, attrs, &rsp) == 0) {
-		for(; rsp; rsp = rsp->next) {
-			sdp_record_t *rec = (sdp_record_t *) rsp->data;
-			sdp_list_t *protos;
-
-			if (sdp_get_access_protos (rec, &protos) == 0) {
-				ch = sdp_get_proto_port (protos, RFCOMM_UUID);
-				if (ch > 0)
-					break;
-			}
-		}
-	}
-
-	sdp_close (s);
-	return MAX (0, ch);
-}
-
-static gboolean
-dun_connect (NMBluez5DunContext *context, GError **error)
-{
-	struct sockaddr_rc sa;
-	struct stat st;
-	int devid, try = 30;
-	char tty[100];
-	const int ttylen = sizeof (tty) - 1;
-
-	struct rfcomm_dev_req req = {
-		.flags = (1 << RFCOMM_REUSE_DLC) | (1 << RFCOMM_RELEASE_ONHUP),
-		.dev_id = -1,
-		.channel = context->rfcomm_channel
-	};
-
-	context->rfcomm_fd = socket (AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-	if (context->rfcomm_fd < 0) {
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "Failed to create RFCOMM socket: (%d) %s",
-		             errno, strerror (errno));
-		return FALSE;
-	}
-
-	/* Connect to the remote device */
-	sa.rc_family = AF_BLUETOOTH;
-	sa.rc_channel = 0;
-	memcpy (&sa.rc_bdaddr, context->src, ETH_ALEN);
-	if (bind (context->rfcomm_fd, (struct sockaddr *) &sa, sizeof(sa))) {
-		nm_log_dbg (LOGD_BT, "(" MAC_FMT "): failed to bind socket: (%d) %s",
-		            MAC_ARG (context->src), errno, strerror (errno));
-	}
-
-	sa.rc_channel = context->rfcomm_channel;
-	memcpy (&sa.rc_bdaddr, context->dst, ETH_ALEN);
-	if (connect (sk, (struct sockaddr *) &sa, sizeof (sa)) ) {
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "Failed to connect to remote device: (%d) %s",
-		             errno, strerror (errno));
-		return FALSE;
-	}
-
-	nm_log_dbg (LOGD_BT, "(" MAC_FMT "): connected to " MAC_FMT "on channel %d",
-	            MAC_ARG (context->src), MAC_ARG (remote), ch);
-
-	/* Create an RFCOMM kernel device for the DUN channel */
-	memcpy (&req.src, context->src, ETH_ALEN);
-	memcpy (&req.dst, context->dst, ETH_ALEN);
-	devid = ioctl (sk, RFCOMMCREATEDEV, &req);
-	if (devid < 0) {
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "(" MAC_FMT "): failed to create rfcomm device: (%d) %s",
-		             MAC_ARG (context->src), errno, strerror (errno));
-		return FALSE;
-	}
-	context->rfcomm_id = devid;
-
-	snprintf (tty, ttylen, "/dev/rfcomm%d", devid);
-	while (stat (tty, &st) < 0 && try--) {
-		snprintf (tty, ttylen, "/dev/rfcomm%d", devid);
-		if (try--) {
-			g_usleep (100 * 1000);
-			continue;
-		}
-
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "(" MAC_FMT "): failed to find rfcomm device",
-		             MAC_ARG (context->src));
-		return FALSE;
-	}
-
-	context->rfcomm_dev = g_strdup (tty);
-	return TRUE;
-}
-
 NMBluez5DunContext *
 nm_bluez5_dun_new (const guint8 adapter[ETH_ALEN],
                    const guint8 remote[ETH_ALEN],
@@ -343,8 +295,8 @@ nm_bluez5_dun_new (const guint8 adapter[ETH_ALEN],
 
 	context = g_slice_new0 (NMBluez5DunContext);
 	setba (context->src, adapter);
-	setba (context->dest, remote);
-	context->channel = (rfcomm_channel >= 0) ? rfcomm_channel : -1;
+	setba (context->dst, remote);
+	context->rfcomm_channel = (rfcomm_channel >= 0) ? rfcomm_channel : -1;
 	context->rfcomm_id = -1;
 	context->rfcomm_fd = -1;
 	context->callback = callback;
@@ -369,15 +321,13 @@ nm_bluez5_dun_cleanup (NMBluez5DunContext *context)
 {
 	g_return_if_fail (context != NULL);
 
-	sdp_search_cleanuP (context);
-
-	g_clear_pointer (&context->rfcomm_dev, g_free);
+	sdp_search_cleanup (context);
 
 	if (context->rfcomm_fd >= 0) {
 		if (context->rfcomm_id >= 0) {
 			struct rfcomm_dev_req req = { 0 };
 
-			req.dev_id = rfcomm_id;
+			req.dev_id = context->rfcomm_id;
 			ioctl (context->rfcomm_fd, RFCOMMRELEASEDEV, &req);
 			context->rfcomm_id = -1;
 		}

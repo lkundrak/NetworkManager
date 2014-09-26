@@ -61,8 +61,7 @@ typedef struct {
 	gboolean connected;
 
 	char *bt_iface;
-	int b5_dun_sk;
-	int b5_dun_id;
+	NMBluez5DunContext *b5_context;
 
 	NMConnectionProvider *provider;
 	GSList *connections;
@@ -161,7 +160,7 @@ nm_bluez_device_get_connected (NMBluezDevice *self)
 	g_return_val_if_fail (NM_IS_BLUEZ_DEVICE (self), FALSE);
 
 	priv = NM_BLUEZ_DEVICE_GET_PRIVATE (self);
-	return priv->connected || (priv->b5_dun_sk >= 0);
+	return priv->connected;
 }
 
 static void
@@ -429,8 +428,8 @@ nm_bluez_device_disconnect (NMBluezDevice *self)
 			args = g_variant_new ("(s)", priv->bt_iface),
 			dbus_iface = BLUEZ4_SERIAL_INTERFACE;
 		} else if (priv->bluez_version == 5) {
-			g_return_if_fail (priv->b5_dun_sk >= 0);
-			nm_bluez5_dun_cleanup (priv->b5_dun_sk, priv->b5_dun_id);
+			nm_bluez5_dun_free (priv->b5_context);
+			priv->b5_context = NULL;
 			goto out;
 		}
 	} else if (priv->connection_bt_type == NM_BT_CAPABILITY_NAP) {
@@ -459,8 +458,6 @@ nm_bluez_device_disconnect (NMBluezDevice *self)
 out:
 	g_clear_pointer (&priv->bt_iface, g_free);
 	priv->connection_bt_type = NM_BT_CAPABILITY_NONE;
-	priv->b5_dun_sk = -1;
-	priv->b5_dun_id = -1;
 }
 
 static void
@@ -527,19 +524,18 @@ nm_bluez_device_connect_async (NMBluezDevice *self,
 		else if (priv->bluez_version == 5) {
 			GError *local = NULL;
 
-			if (nm_bluez5_dun_connect (priv->adapter_address,
-			                           priv->bin_address,
-			                           &priv->b5_dun_sk,
-			                           &priv->bt_iface,
-			                           &priv->b5_dun_id,
-			                           &local)) {
-				g_simple_async_result_set_op_res_gpointer (simple,
-				                                           g_strdup (priv->bt_iface),
-				                                           g_free);
-			} else
-				g_simple_async_result_take_error (simple, local);
+			priv->b5_context = nm_bluez5_dun_new (
+				priv->adapter_address,
+				priv->address,
+				-1, /* rfcomm_channel, -1 = scan */
+				callback,
+				user_data,
+				NULL); /* error NOT USED */
 
-			g_simple_async_result_complete_in_idle (simple);
+			if (!nm_bluez5_dun_connect (priv->b5_context, &local)) {
+				g_simple_async_result_take_error (simple, local);
+				g_simple_async_result_complete_in_idle (simple);
+			}
 			return;
 		}
 	} else

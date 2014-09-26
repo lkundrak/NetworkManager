@@ -23,7 +23,7 @@
 
 #include <glib.h>
 
-typedef struct NMBluez5DunContext;
+typedef struct _NMBluez5DunContext NMBluez5DunContext;
 
 typedef void (*NMBluez5DunFunc) (NMBluez5DunContext *context,
                                  int rfcomm_channel,
