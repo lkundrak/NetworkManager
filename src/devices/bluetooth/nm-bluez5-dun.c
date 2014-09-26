@@ -26,8 +26,8 @@
 #include <net/ethernet.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include <sys/stat.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include "nm-bluez5-dun.h"
 #include "nm-bt-error.h"
@@ -41,7 +41,7 @@ typedef struct _NMBluez5DunContext {
 	char *dest;
 	int rfcomm_channel;
 	int rfcomm_fd;
-	char *rfcomm_dev;
+	int rfcomm_tty_fd;
 	int rfcomm_id;
 	NMBluez5DunFunc callback;
 	gpointer user_data;
@@ -53,7 +53,6 @@ static gboolean
 dun_connect (NMBluez5DunContext *context, GError **error)
 {
 	struct sockaddr_rc sa;
-	struct stat st;
 	int devid, try = 30;
 	char tty[100];
 	const int ttylen = sizeof (tty) - 1;
@@ -106,7 +105,7 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 	context->rfcomm_id = devid;
 
 	snprintf (tty, ttylen, "/dev/rfcomm%d", devid);
-	while (stat (tty, &st) < 0 && try--) {
+	while ((context->rfcomm_tty_fd = open (tty, O_RDONLY | O_NOCTTY)) < 0 && try--) {
 		if (try) {
 			g_usleep (100 * 1000);
 			continue;
@@ -118,7 +117,6 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 		return FALSE;
 	}
 
-	context->rfcomm_dev = g_strdup (tty);
 	return TRUE;
 }
 
@@ -323,6 +321,9 @@ nm_bluez5_dun_cleanup (NMBluez5DunContext *context)
 		close (context->rfcomm_fd);
 		context->rfcomm_fd = -1;
 	}
+
+	close (context->rfcomm_tty_fd);
+	context->rfcomm_tty_fd = -1;
 
 	g_free (context->source);
 	context->source = NULL;
