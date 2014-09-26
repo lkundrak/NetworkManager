@@ -142,10 +142,19 @@ sdp_search_completed_cb (uint8_t type, uint16_t status, uint8_t *rsp, size_t siz
 	uint8_t dataType;
 	int channel = -1;
 
+	nm_log_dbg (LOGD_BT, "(%s -> %s): SDP search finished with type=%d status=%d",
+	            context->source, context->dest, status, type);
+
+	/* SDP response received */
 	if (status || type != SDP_SVC_SEARCH_ATTR_RSP) {
 		err = -EPROTO;
 		goto done;
 	}
+
+	scanned = sdp_extract_seqtype (rsp, bytesleft, &dataType, &seqlen);
+
+	nm_log_dbg (LOGD_BT, "(%s -> %s): SDP sequence type scanned=%d length=%d",
+	            context->source, context->dest, scanned, seqlen);
 
 	scanned = sdp_extract_seqtype (rsp, bytesleft, &dataType, &seqlen);
 	if (!scanned || !seqlen)
@@ -171,6 +180,9 @@ sdp_search_completed_cb (uint8_t type, uint16_t status, uint8_t *rsp, size_t siz
 			/* Extract the DUN channel number */
 			channel = sdp_get_proto_port (protos, RFCOMM_UUID);
 			sdp_list_free (protos, NULL);
+
+			nm_log_dbg (LOGD_BT, "(%s -> %s): SDP channel=%d",
+			            context->source, context->dest, channel);
 		}
 		sdp_record_free (rec);
 
@@ -193,12 +205,18 @@ sdp_search_process_cb (GIOChannel *channel, GIOCondition condition, gpointer use
 	NMBluez5DunContext *context = user_data;
 	int err = 0;
 
+	nm_log_dbg (LOGD_BT, "(%s -> %s): SDP search progressed with condition=%d",
+	            context->source, context->dest, condition);
+
 	if (condition & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)) {
 		err = EIO;
 		return FALSE;
 	}
 
 	if (sdp_process (context->sdp_session) < 0) {
+		nm_log_dbg (LOGD_BT, "(%s -> %s): SDP search finished",
+		            context->source, context->dest);
+
 		/* Search finished successfully. */
 		return FALSE;
 	}
@@ -220,10 +238,16 @@ sdp_connect_watch (GIOChannel *channel, GIOCondition condition, gpointer user_da
 	context->sdp_watch_id = 0;
 
 	fd = g_io_channel_unix_get_fd (channel);
-	if (getsockopt (fd, SOL_SOCKET, SO_ERROR, &fd_err, &len) < 0)
-		err = -errno;
-	else
-		err = -fd_err;
+	if (getsockopt (fd, SOL_SOCKET, SO_ERROR, &fd_err, &len) < 0) {
+		nm_log_dbg (LOGD_BT, "(%s -> %s): getsockopt error=%d",
+		            context->source, context->dest, errno);
+		err = errno;
+	} else {
+		nm_log_dbg (LOGD_BT, "(%s -> %s): SO_ERROR error=%d",
+		            context->source, context->dest, fd_err);
+		err = fd_err;
+	}
+
 	if (sdp_set_notify (context->sdp_session, sdp_search_completed_cb, context) < 0) {
 		err = -EIO;
 	}
@@ -244,28 +268,6 @@ sdp_connect_watch (GIOChannel *channel, GIOCondition condition, gpointer user_da
 	sdp_list_free (attrs, NULL);
 	sdp_list_free (search, NULL);
 	return G_SOURCE_REMOVE;
-}
-
-static gboolean
-dun_find_channel (NMBluez5DunContext *context, GError **error)
-{
-	GIOChannel *channel;
-
-	context->sdp_session = sdp_connect (&context->src, &context->dst, SDP_NON_BLOCKING);
-	if (!context->sdp_session) {
-		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
-		             "(%s): failed to connect to the SDP server: (%d) %s",
-		             context->source, errno, strerror (errno));
-		return FALSE;
-	}
-
-	channel = g_io_channel_unix_new (sdp_get_socket (context->sdp_session));
-	context->sdp_watch_id = g_io_add_watch (channel,
-	                                        G_IO_OUT | G_IO_HUP | G_IO_ERR | G_IO_NVAL,
-	                                        sdp_connect_watch,
-	                                        context);
-	g_io_channel_unref (channel);
-	return TRUE;
 }
 
 NMBluez5DunContext *
@@ -294,12 +296,24 @@ nm_bluez5_dun_new (const char *adapter,
 gboolean
 nm_bluez5_dun_connect (NMBluez5DunContext *context, GError **error)
 {
-	/* Find channel */
-	if (context->rfcomm_channel < 0)
-		return dun_find_channel (context, error);
+	GIOChannel *channel;
 
-	/* Connect */
-	return dun_connect (context, error);
+	context->sdp_session = sdp_connect (&context->src, &context->dst, SDP_NON_BLOCKING);
+	if (!context->sdp_session) {
+		int err = sdp_get_error (context->sdp_session);
+		g_set_error (error, NM_BT_ERROR, NM_BT_ERROR_DUN_CONNECT_FAILED,
+		             "Failed to connect to the SDP server: (%d) %s",
+		             err, strerror (err));
+		return FALSE;
+	}
+
+	channel = g_io_channel_unix_new (sdp_get_socket (context->sdp_session));
+	context->sdp_watch_id = g_io_add_watch (channel,
+	                                        G_IO_OUT | G_IO_HUP | G_IO_ERR | G_IO_NVAL,
+	                                        sdp_connect_watch,
+	                                        context);
+	g_io_channel_unref (channel);
+	return TRUE;
 }
 
 /* Only clean up connection-related stuff to allow reconnect */
