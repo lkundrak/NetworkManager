@@ -107,8 +107,7 @@ dun_connect (NMBluez5DunContext *context, GError **error)
 
 	snprintf (tty, ttylen, "/dev/rfcomm%d", devid);
 	while (stat (tty, &st) < 0 && try--) {
-		snprintf (tty, ttylen, "/dev/rfcomm%d", devid);
-		if (try--) {
+		if (try) {
 			g_usleep (100 * 1000);
 			continue;
 		}
