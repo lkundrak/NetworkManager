@@ -537,7 +537,20 @@ receive_ra (struct ndp *ndp, struct ndp_msg *msg, gpointer user_data)
 
 		/* Address */
 		if (ndp_msg_opt_prefix_flag_auto_addr_conf (msg, offset)) {
+			NMUtilsIPv6IfaceId iid;
+
+			iid.id = rdisc->iid.id;
+			if (nm_platform_link_get_ipv6_token (rdisc->ifindex, &iid))
+				debug ("(%s) IPv6 tokenized identifier present", rdisc->ifname);
+
 			if (route.plen == 64 && rdisc->iid.id) {
+				if (rdisc->iid.id != iid.id) {
+					debug ("(%s) IPv6 interface identifier changed, flushing addresses", rdisc->ifname);
+					g_array_remove_range (rdisc->addresses, 0, rdisc->addresses->len);
+					changed |= NM_RDISC_CONFIG_ADDRESSES;
+					rdisc->iid.id = iid.id;
+				}
+
 				memset (&address, 0, sizeof (address));
 				address.address = route.network;
 				address.timestamp = now;
