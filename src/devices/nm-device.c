@@ -1289,6 +1289,7 @@ nm_device_master_add_slave (NMDevice *self, NMDevice *slave, gboolean configure)
 	g_return_val_if_fail (slave != NULL, FALSE);
 	g_return_val_if_fail (NM_DEVICE_GET_CLASS (self)->enslave_slave != NULL, FALSE);
 
+	g_return_val_if_fail (nm_device_get_managed (slave), FALSE);
 	if (configure)
 		g_return_val_if_fail (nm_device_get_state (slave) >= NM_DEVICE_STATE_DISCONNECTED, FALSE);
 
