@@ -43,7 +43,7 @@ static guint signals[LAST_SIGNAL] = { 0 };
 void
 nm_rdisc_set_iid (NMRDisc *rdisc, const NMUtilsIPv6IfaceId iid)
 {
-	g_return_if_fail (NM_IS_RDISC (rdisc));
+	g_return_val_if_fail (NM_IS_RDISC (rdisc), FALSE);
 
 	rdisc->iid = iid;
 }
