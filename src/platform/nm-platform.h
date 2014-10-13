@@ -143,7 +143,7 @@ typedef enum {
 
 #define NM_PLATFORM_LIFETIME_PERMANENT G_MAXUINT32
 
-typedef enum {
+enum _NMPlatformSource {
 	/* In priority order; higher number == higher priority */
 	NM_PLATFORM_SOURCE_UNKNOWN,
 	NM_PLATFORM_SOURCE_KERNEL,
@@ -155,7 +155,7 @@ typedef enum {
 	NM_PLATFORM_SOURCE_DHCP,
 	NM_PLATFORM_SOURCE_RDISC,
 	NM_PLATFORM_SOURCE_USER,
-} NMPlatformSource;
+};
 
 
 typedef struct {
