@@ -1682,7 +1682,8 @@ device_has_config (NMDevice *self)
 		return TRUE;
 
 	/* The existence of a software device is good enough. */
-	if (nm_device_is_software (self))
+	if (nm_device_is_software (self)
+	    && nm_platform_link_get_type (priv->ifindex) != NM_LINK_TYPE_VETH)
 		return TRUE;
 
 	/* Slaves are also configured by definition */
