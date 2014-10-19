@@ -1830,6 +1830,7 @@ activate_connection_cb (GObject *client, GAsyncResult *result, gpointer user_dat
 						g_source_remove (progress_id);
 					progress_id = g_timeout_add (120, progress_device_cb, device);
 				}
+				active_connection_state_cb (active, NULL, nmc);
 			}
 
 			/* Start timer not to loop forever when signals are not emitted */
