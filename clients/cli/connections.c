@@ -1601,8 +1601,12 @@ vpn_connection_state_reason_to_string (NMVpnConnectionStateReason reason)
 }
 
 static void
-device_state_cb (NMDevice *device, GParamSpec *pspec, gpointer user_data)
-{
+device_state_cb (NMDevice *device,
+                 NMDeviceState old_state,
+                 NMDeviceState new_state,
+                 NMDeviceStateReason reason,
+                 gpointer user_data
+) {
 	NmCli *nmc = (NmCli *) user_data;
 	NMActiveConnection *active;
 	NMDeviceState state;
@@ -1668,9 +1672,9 @@ active_connection_state_cb (NMActiveConnection *active, GParamSpec *pspec, gpoin
 		        || NM_IS_DEVICE_TEAM (device)
 		        || NM_IS_DEVICE_BRIDGE (device))) {
 			g_signal_handlers_disconnect_by_func (active, G_CALLBACK (active_connection_state_cb), nmc);
-			g_signal_connect (device, "notify::" NM_DEVICE_STATE, G_CALLBACK (device_state_cb), nmc);
 
-			device_state_cb (device, NULL, nmc);
+			g_signal_connect (device, "state-changed", G_CALLBACK (device_state_cb), nmc);
+			device_state_cb (device, 0, nm_device_get_state (device), 0, nmc);
 		}
 	}
 }
