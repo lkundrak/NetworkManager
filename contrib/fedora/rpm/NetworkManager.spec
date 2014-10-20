@@ -24,7 +24,7 @@
 
 %define obsoletes_nmver 1:0.9.9.95-1
 
-%global with_nmtui 1
+%bcond_without nmtui
 
 %if 0%{?fedora}
 %global regen_docs 1
@@ -35,40 +35,40 @@
 %define systemd_dir %{_prefix}/lib/systemd/system
 %define udev_dir %{_prefix}/lib/udev
 
-%global with_adsl 1
-%global with_bluetooth 1
-%global with_team 1
-%global with_wifi 1
-%global with_wimax 0
-%global with_wwan 1
+%bcond_without adsl
+%bcond_without bluetooth
+%bcond_without team
+%bcond_without wifi
+%bcond_with wimax
+%bcond_without wwan
 
 # WiMAX still supported on <= F19
 %if ! 0%{?rhel} && (! 0%{?fedora} || 0%{?fedora} < 20)
-%global with_wimax 1
+%bcond_without wimax
 %endif
 
 # ModemManager on Fedora < 20 too old for Bluetooth && wwan
 %if (0%{?fedora} && 0%{?fedora} < 20)
-%global with_bluetooth 0
-%global with_wwan 0
+%bcond_with bluetooth
+%bcond_with wwan
 %endif
 
 # Bluetooth requires the WWAN plugin
-%if 0%{?with_bluetooth}
-%global with_wwan 1
+%if %with bluetooth
+%bcond_without wwan
 %endif
 
 %ifarch s390 s390x
 # No hardware-based plugins on s390
-%global with_adsl 0
-%global with_bluetooth 0
-%global with_wifi 0
-%global with_wimax 0
-%global with_wwan 0
+%bcond_with adsl
+%bcond_with bluetooth
+%bcond_with wifi
+%bcond_with wimax
+%bcond_with wwan
 %endif
 
 %if (0%{?fedora} && 0%{?fedora} <= 19)
-%global with_team 0
+%bcond_with team
 %endif
 
 
@@ -151,19 +151,19 @@ BuildRequires: libuuid-devel
 BuildRequires: libgudev1-devel >= 143
 BuildRequires: vala-tools
 BuildRequires: iptables
-%if 0%{?with_bluetooth} && 0%{?fedora} > 19
+%if %with bluetooth && 0%{?fedora} > 19
 BuildRequires: bluez-libs-devel
 %endif
-%if 0%{?with_wimax}
+%if %with wimax
 BuildRequires: wimax-devel
 %endif
 BuildRequires: systemd >= 200-3 systemd-devel
 BuildRequires: libsoup-devel
 BuildRequires: libndp-devel >= 1.0
-%if 0%{?with_bluetooth} || (0%{?with_wwan} && (0%{?rhel} || (0%{?fedora} && 0%{?fedora} > 19)))
+%if %with bluetooth || (%with wwan && (0%{?rhel} || (0%{?fedora} && 0%{?fedora} > 19)))
 BuildRequires: ModemManager-glib-devel >= 1.0
 %endif
-%if 0%{?with_nmtui}
+%if %with nmtui
 BuildRequires: newt-devel
 %endif
 BuildRequires: /usr/bin/dbus-launch
@@ -179,7 +179,7 @@ Ethernet, Bridge, Bond, VLAN, Team, InfiniBand, Wi-Fi, mobile broadband
 services.
 
 
-%if 0%{?with_adsl}
+%if %with adsl
 %package adsl
 Summary: ADSL device plugin for NetworkManager
 Group: System Environment/Base
@@ -192,7 +192,7 @@ This package contains NetworkManager support for ADSL devices.
 %endif
 
 
-%if 0%{?with_bluetooth}
+%if %with bluetooth
 %package bluetooth
 Summary: Bluetooth device plugin for NetworkManager
 Group: System Environment/Base
@@ -211,7 +211,7 @@ This package contains NetworkManager support for Bluetooth devices.
 %endif
 
 
-%if 0%{?with_team}
+%if %with team
 %package team
 Summary: Team device plugin for NetworkManager
 Group: System Environment/Base
@@ -224,7 +224,7 @@ This package contains NetworkManager support for team devices.
 %endif
 
 
-%if 0%{?with_wifi}
+%if %with wifi
 %package wifi
 Summary: Wifi plugin for NetworkManager
 Group: System Environment/Base
@@ -237,7 +237,7 @@ This package contains NetworkManager support for Wifi and OLPC devices.
 %endif
 
 
-%if 0%{?with_wwan}
+%if %with wwan
 %package wwan
 Summary: Mobile broadband device plugin for NetworkManager
 Group: System Environment/Base
@@ -250,7 +250,7 @@ This package contains NetworkManager support for mobile broadband (WWAN) devices
 %endif
 
 
-%if 0%{?with_wimax}
+%if %with wimax
 %package wimax
 Summary: Intel WiMAX device support for NetworkManager
 Group: System Environment/Base
@@ -392,7 +392,7 @@ by nm-connection-editor and nm-applet in a non-graphical environment.
 %else
 	--with-modem-manager-1=no \
 %endif
-%if 0%{?with_wimax}
+%if %with wimax
 	--enable-wimax=yes \
 %else
 	--enable-wimax=no \
@@ -408,7 +408,7 @@ by nm-connection-editor and nm-applet in a non-graphical environment.
 %else
 	--with-wext=no \
 %endif
-%if 0%{?with_team}
+%if %with team
 	--enable-teamdctl=yes \
 %else
 	--enable-teamdctl=no \
@@ -537,38 +537,38 @@ fi
 %dir %{_datadir}/doc/NetworkManager/examples
 %{_datadir}/doc/NetworkManager/examples/server.conf
 
-%if 0%{?with_adsl}
+%if %with adsl
 %files adsl
 %defattr(-,root,root,0755)
 %{_libdir}/%{name}/libnm-device-plugin-adsl.so
 %endif
 
-%if 0%{?with_bluetooth}
+%if %with bluetooth
 %files bluetooth
 %defattr(-,root,root,0755)
 %{_libdir}/%{name}/libnm-device-plugin-bluetooth.so
 %endif
 
-%if 0%{?with_team}
+%if %with team
 %files team
 %defattr(-,root,root,0755)
 %{_libdir}/%{name}/libnm-device-plugin-team.so
 %endif
 
-%if 0%{?with_wifi}
+%if %with wifi
 %files wifi
 %defattr(-,root,root,0755)
 %{_libdir}/%{name}/libnm-device-plugin-wifi.so
 %endif
 
-%if 0%{?with_wwan}
+%if %with wwan
 %files wwan
 %defattr(-,root,root,0755)
 %{_libdir}/%{name}/libnm-device-plugin-wwan.so
 %{_libdir}/%{name}/libnm-wwan.so
 %endif
 
-%if 0%{?with_wimax}
+%if %with wimax
 %files wimax
 %defattr(-,root,root,0755)
 %{_libdir}/%{name}/libnm-device-plugin-wimax.so
@@ -641,7 +641,7 @@ fi
 %dir %{_sysconfdir}/%{name}/conf.d
 %config %{_sysconfdir}/%{name}/conf.d/00-server.conf
 
-%if 0%{?with_nmtui}
+%if %with nmtui
 %files tui
 %{_bindir}/nmtui
 %{_bindir}/nmtui-edit
