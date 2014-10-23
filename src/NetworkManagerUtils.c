@@ -1744,6 +1744,10 @@ monotonic_timestamp_get (struct timespec *tp)
 	int err;
 
 	err = clock_gettime (CLOCK_BOOTTIME, tp);
+	if (err == -1 && errno == EINVAL) {
+		nm_log_dbg (LOGD_CORE, "CLOCK_BOOTTIME not supported, falling back to CLOCK_MONOTONIC");
+		err = clock_gettime (CLOCK_MONOTONIC, tp);
+	}
 
 	g_assert (err == 0); (void)err;
 	g_assert (tp->tv_nsec >= 0 && tp->tv_nsec < NM_UTILS_NS_PER_SECOND);
