@@ -71,7 +71,8 @@ NMVpnConnection * nm_vpn_connection_new (NMConnection *connection,
                                          const char *specific_object,
                                          NMAuthSubject *subject);
 
-void                 nm_vpn_connection_activate        (NMVpnConnection *connection);
+void                 nm_vpn_connection_activate        (NMVpnConnection *connection,
+                                                        gboolean can_persist);
 NMConnection *       nm_vpn_connection_get_connection  (NMVpnConnection *connection);
 NMVpnConnectionState nm_vpn_connection_get_vpn_state   (NMVpnConnection *connection);
 const char *         nm_vpn_connection_get_banner      (NMVpnConnection *connection);
