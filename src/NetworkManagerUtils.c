@@ -1741,7 +1741,7 @@ static void
 monotonic_timestamp_get (struct timespec *tp)
 {
 	static int clock_mode = 0;
-	gboolean first_time = 0;
+	gboolean first_time = FALSE;
 	int err = 0;
 
 	switch (clock_mode) {
@@ -1766,7 +1766,7 @@ monotonic_timestamp_get (struct timespec *tp)
 		break;
 	}
 
-	g_assert (err == 0);
+	g_assert (err == 0); (void)err;
 	g_assert (tp->tv_nsec >= 0 && tp->tv_nsec < NM_UTILS_NS_PER_SECOND);
 
 	if (G_LIKELY (!first_time))
