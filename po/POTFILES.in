@@ -6,8 +6,11 @@ clients/cli/connections.c
 clients/cli/devices.c
 clients/cli/general.c
 clients/cli/nmcli.c
+clients/cli/polkit-agent.c
 clients/cli/settings.c
 clients/cli/utils.c
+clients/common/nm-polkit-listener.c
+clients/common/nm-secret-agent-simple.c
 clients/nm-online.c
 clients/tui/newt/nmt-newt-utils.c
 clients/tui/nm-editor-utils.c
@@ -34,7 +37,6 @@ clients/tui/nmt-password-dialog.c
 clients/tui/nmt-password-fields.c
 clients/tui/nmt-route-editor.c
 clients/tui/nmt-route-table.c
-clients/tui/nmt-secret-agent.c
 clients/tui/nmt-slave-list.c
 clients/tui/nmt-widget-list.c
 clients/tui/nmtui-connect.c

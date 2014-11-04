@@ -41,6 +41,7 @@ typedef struct {
 	char *dbus_service;
 	char *program;
 	char *namefile;
+	gboolean can_persist;
 
 	NMVpnConnection *active;
 	GSList *pending;
@@ -86,6 +87,8 @@ nm_vpn_service_new (const char *namefile, GError **error)
 	priv->name = g_key_file_get_string (kf, VPN_CONNECTION_GROUP, "name", error);
 	if (!priv->name)
 		goto error;
+
+	priv->can_persist = g_key_file_get_boolean (kf, VPN_CONNECTION_GROUP, "can-persist", NULL);
 
 	priv->service_running = nm_dbus_manager_name_has_owner (nm_dbus_manager_get (), priv->dbus_service);
 
@@ -239,7 +242,7 @@ start_active_vpn (NMVpnService *self, GError **error)
 
 	if (priv->service_running) {
 		/* Just activate the VPN */
-		nm_vpn_connection_activate (priv->active);
+		nm_vpn_connection_activate (priv->active, priv->can_persist);
 		return TRUE;
 	} else if (priv->start_timeout == 0) {
 		/* VPN service not running, start it */
