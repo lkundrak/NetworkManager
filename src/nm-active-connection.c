@@ -37,8 +37,12 @@
 #include "nm-active-connection-glue.h"
 #include "nm-glib-compat.h"
 
+static void nm_active_connection_connection_interface_init (NMConnectionInterface *iface);
+
 /* Base class for anything implementing the Connection.Active D-Bus interface */
-G_DEFINE_ABSTRACT_TYPE (NMActiveConnection, nm_active_connection, G_TYPE_OBJECT)
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (NMActiveConnection, nm_active_connection, G_TYPE_OBJECT,
+                                  G_IMPLEMENT_INTERFACE (NM_TYPE_CONNECTION, nm_active_connection_connection_interface_init);
+                                  )
 
 #define NM_ACTIVE_CONNECTION_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), \
                                              NM_TYPE_ACTIVE_CONNECTION, \
@@ -717,6 +721,8 @@ set_property (GObject *object, guint prop_id,
 	case PROP_INT_CONNECTION:
 		g_warn_if_fail (priv->connection == NULL);
 		priv->connection = g_value_dup_object (value);
+		nm_connection_set_path (NM_CONNECTION (object), nm_connection_get_path (priv->connection));
+		nm_connection_replace_settings_from_connection (NM_CONNECTION (object), priv->connection);
 		break;
 	case PROP_INT_DEVICE:
 		nm_active_connection_set_device (NM_ACTIVE_CONNECTION (object), g_value_get_object (value));
@@ -1047,3 +1053,7 @@ nm_active_connection_class_init (NMActiveConnectionClass *ac_class)
 	                                        &dbus_glib_nm_active_connection_object_info);
 }
 
+static void
+nm_active_connection_connection_interface_init (NMConnectionInterface *iface)
+{
+}

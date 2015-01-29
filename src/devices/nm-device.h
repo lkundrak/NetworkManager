@@ -263,8 +263,9 @@ GSList *        nm_device_master_get_slaves (NMDevice *dev);
 /* Slave */
 NMDevice *      nm_device_get_master        (NMDevice *dev);
 
-NMActRequest *	nm_device_get_act_request	(NMDevice *dev);
-NMConnection *  nm_device_get_connection	(NMDevice *dev);
+NMActRequest *         nm_device_get_act_request         (NMDevice *dev);
+NMConnection *         nm_device_get_connection          (NMDevice *dev);
+NMSettingsConnection * nm_device_get_settings_connection (NMDevice *dev);
 
 void            nm_device_removed        (NMDevice *dev);
 

@@ -2391,7 +2391,7 @@ find_master (NMManager *self,
 				if (candidate == device)
 					continue;
 
-				if (nm_device_get_connection (candidate) == master_connection) {
+				if (NM_CONNECTION (nm_device_get_settings_connection (candidate)) == master_connection) {
 					master_device = candidate;
 					break;
 				}

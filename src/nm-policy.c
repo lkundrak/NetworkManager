@@ -1099,7 +1099,7 @@ device_state_changed (NMDevice *device,
 {
 	NMPolicy *policy = (NMPolicy *) user_data;
 	NMPolicyPrivate *priv = NM_POLICY_GET_PRIVATE (policy);
-	NMSettingsConnection *connection = NM_SETTINGS_CONNECTION (nm_device_get_connection (device));
+	NMSettingsConnection *connection = nm_device_get_settings_connection (device);
 	const char *ip_iface = nm_device_get_ip_iface (device);
 	NMIP4Config *ip4_config;
 	NMIP6Config *ip6_config;
@@ -1575,7 +1575,7 @@ firewall_update_zone (NMPolicy *policy, NMConnection *connection)
 	for (iter = nm_manager_get_devices (priv->manager); iter; iter = g_slist_next (iter)) {
 		NMDevice *dev = NM_DEVICE (iter->data);
 
-		if (   (nm_device_get_connection (dev) == connection)
+		if (   (NM_CONNECTION (nm_device_get_settings_connection (dev)) == connection)
 		    && (nm_device_get_state (dev) == NM_DEVICE_STATE_ACTIVATED)
 		    && !nm_device_uses_assumed_connection (dev)) {
 			nm_firewall_manager_add_or_change_zone (nm_firewall_manager_get (),

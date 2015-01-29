@@ -484,7 +484,7 @@ done:
 static void
 update_seen_bssids_cache (NMDeviceWifi *self, NMAccessPoint *ap)
 {
-	NMConnection *connection;
+	NMSettingsConnection *connection;
 
 	g_return_if_fail (NM_IS_DEVICE_WIFI (self));
 
@@ -496,9 +496,9 @@ update_seen_bssids_cache (NMDeviceWifi *self, NMAccessPoint *ap)
 		return;
 
 	if (nm_device_get_state (NM_DEVICE (self)) == NM_DEVICE_STATE_ACTIVATED) {
-		connection = nm_device_get_connection (NM_DEVICE (self));
+		connection = nm_device_get_settings_connection (NM_DEVICE (self));
 		if (connection) {
-			nm_settings_connection_add_seen_bssid (NM_SETTINGS_CONNECTION (connection),
+			nm_settings_connection_add_seen_bssid (connection,
 			                                       nm_ap_get_address (ap));
 		}
 	}

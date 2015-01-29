@@ -804,7 +804,15 @@ nm_device_get_connection (NMDevice *self)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
 
-	return priv->act_request ? nm_act_request_get_connection (priv->act_request) : NULL;
+	return priv->act_request ? NM_CONNECTION (priv->act_request) : NULL;
+}
+
+NMSettingsConnection *
+nm_device_get_settings_connection (NMDevice *self)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	return priv->act_request ? NM_SETTINGS_CONNECTION (nm_act_request_get_connection (priv->act_request)) : NULL;
 }
 
 RfKillType
@@ -7593,7 +7601,7 @@ _set_state_full (NMDevice *self,
 	NMDeviceState old_state;
 	NMActRequest *req;
 	gboolean no_firmware = FALSE;
-	NMConnection *connection;
+	NMSettingsConnection *connection;
 
 	/* Track re-entry */
 	g_warn_if_fail (priv->in_state_changed == FALSE);
@@ -7786,10 +7794,10 @@ _set_state_full (NMDevice *self,
 			break;
 		}
 
-		connection = nm_device_get_connection (self);
+		connection = nm_device_get_settings_connection (self);
 		_LOGW (LOGD_DEVICE | LOGD_WIFI,
 		       "Activation: failed for connection '%s'",
-		       connection ? nm_connection_get_id (connection) : "<unknown>");
+		       connection ? nm_connection_get_id (NM_CONNECTION (connection)) : "<unknown>");
 
 		/* Notify any slaves of the unexpected failure */
 		nm_device_master_release_slaves (self);
@@ -7799,8 +7807,8 @@ _set_state_full (NMDevice *self,
 		 * failed (zero timestamp), connections that succeeded (non-zero timestamp),
 		 * and those we haven't tried yet (no timestamp).
 		 */
-		if (connection && !nm_settings_connection_get_timestamp (NM_SETTINGS_CONNECTION (connection), NULL)) {
-			nm_settings_connection_update_timestamp (NM_SETTINGS_CONNECTION (connection),
+		if (connection && !nm_settings_connection_get_timestamp (connection, NULL)) {
+			nm_settings_connection_update_timestamp (connection,
 			                                         (guint64) 0,
 			                                         TRUE);
 		}

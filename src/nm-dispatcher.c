@@ -476,6 +476,7 @@ _dispatcher_call (DispatcherAction action,
 	if (connection) {
 		GVariant *connection_dict;
 		const char *filename;
+		NMSettingsConnection *s_con = nm_device_get_settings_connection (device);
 
 		connection_dict = nm_connection_to_dbus (connection, NM_CONNECTION_SERIALIZE_NO_SECRETS);
 		connection_hash = nm_utils_connection_dict_to_hash (connection_dict);
@@ -485,16 +486,19 @@ _dispatcher_call (DispatcherAction action,
 		value_hash_add_object_path (connection_props,
 		                            NMD_CONNECTION_PROPS_PATH,
 		                            nm_connection_get_path (connection));
-		filename = nm_settings_connection_get_filename (NM_SETTINGS_CONNECTION (connection));
-		if (filename) {
-			value_hash_add_str (connection_props,
-			                    NMD_CONNECTION_PROPS_FILENAME,
-			                    filename);
-		}
-		if (nm_settings_connection_get_nm_generated_assumed (NM_SETTINGS_CONNECTION (connection))) {
-			value_hash_add_bool (connection_props,
-			                     NMD_CONNECTION_PROPS_EXTERNAL,
-			                     TRUE);
+
+		if (s_con) {
+			filename = nm_settings_connection_get_filename (s_con);
+			if (filename) {
+				value_hash_add_str (connection_props,
+						    NMD_CONNECTION_PROPS_FILENAME,
+						    filename);
+			}
+			if (nm_settings_connection_get_nm_generated_assumed (s_con)) {
+				value_hash_add_bool (connection_props,
+						     NMD_CONNECTION_PROPS_EXTERNAL,
+						     TRUE);
+			}
 		}
 	} else {
 		connection_hash = value_hash_create ();
