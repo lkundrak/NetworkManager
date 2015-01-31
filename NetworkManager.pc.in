@@ -4,7 +4,8 @@ libdir=@libdir@
 includedir=@includedir@
 libgnome_serverdir=@libexecdir@
 plugindir=@libdir@/NetworkManager
-configdir=@sysconfdir@/NetworkManager
+userconfigdir=@sysconfdir@/NetworkManager
+configdir=@prefix@/lib/NetworkManager
 
 Name: NetworkManager
 Description: System for maintaining active network connection

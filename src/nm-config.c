@@ -35,6 +35,7 @@
 
 #define NM_DEFAULT_SYSTEM_CONF_FILE    NMCONFDIR "/NetworkManager.conf"
 #define NM_DEFAULT_SYSTEM_CONF_DIR     NMCONFDIR "/conf.d"
+#define NM_DEFAULT_VENDOR_CONF_DIR     NMVENDORCONFDIR "/conf.d"
 #define NM_OLD_SYSTEM_CONF_FILE        NMCONFDIR "/nm-system-settings.conf"
 #define NM_NO_AUTO_DEFAULT_STATE_FILE  NMSTATEDIR "/no-auto-default.state"
 
@@ -512,18 +513,57 @@ sort_asciibetically (gconstpointer a, gconstpointer b)
 	return strcmp (s1, s2);
 }
 
-/* call this function only once! */
-NMConfig *
-nm_config_new (GError **error)
+static char *
+read_conf_dir (char *config_dir, GError **error)
 {
-	NMConfigPrivate *priv = NULL;
 	GFile *dir;
 	GFileEnumerator *direnum;
 	GFileInfo *info;
 	GPtrArray *confs;
 	const char *name;
 	int i;
+	GString *config_description = g_string_new (NULL);
+
+	confs = g_ptr_array_new_with_free_func (g_free);
+
+	dir = g_file_new_for_path (config_dir);
+	direnum = g_file_enumerate_children (dir, G_FILE_ATTRIBUTE_STANDARD_NAME, 0, NULL, NULL);
+	if (direnum) {
+		while ((info = g_file_enumerator_next_file (direnum, NULL, NULL))) {
+			name = g_file_info_get_name (info);
+			if (g_str_has_suffix (name, ".conf")) {
+				g_ptr_array_add (confs, g_build_filename (config_dir, name, NULL));
+				if (confs->len > 1)
+					g_string_append (config_description, ", ");
+				g_string_append (config_description, name);
+			}
+			g_object_unref (info);
+		}
+		g_object_unref (direnum);
+	}
+	g_object_unref (dir);
+
+	g_ptr_array_sort (confs, sort_asciibetically);
+
+	for (i = 0; i < confs->len; i++) {
+		if (!read_config (singleton, confs->pdata[i], error)) {
+			g_object_unref (singleton);
+			singleton = NULL;
+			break;
+		}
+	}
+	g_ptr_array_unref (confs);
+
+	return g_string_free (config_description, FALSE);
+}
+
+/* call this function only once! */
+NMConfig *
+nm_config_new (GError **error)
+{
+	NMConfigPrivate *priv = NULL;
 	GString *config_description;
+	char *desc;
 
 	g_assert (!singleton);
 	singleton = NM_CONFIG (g_object_new (NM_TYPE_CONFIG, NULL));
@@ -536,45 +576,34 @@ nm_config_new (GError **error)
 		return NULL;
 	}
 
+	config_description = g_string_new (priv->nm_conf_path);
+
 	/* Now read the overrides in the config dir */
-	if (cli_config_dir)
+	if (cli_config_dir) {
 		priv->config_dir = g_strdup (cli_config_dir);
-	else
+	} else {
 		priv->config_dir = g_strdup (NM_DEFAULT_SYSTEM_CONF_DIR);
 
-	confs = g_ptr_array_new_with_free_func (g_free);
-	config_description = g_string_new (priv->nm_conf_path);
-	dir = g_file_new_for_path (priv->config_dir);
-	direnum = g_file_enumerate_children (dir, G_FILE_ATTRIBUTE_STANDARD_NAME, 0, NULL, NULL);
-	if (direnum) {
-		while ((info = g_file_enumerator_next_file (direnum, NULL, NULL))) {
-			name = g_file_info_get_name (info);
-			if (g_str_has_suffix (name, ".conf")) {
-				g_ptr_array_add (confs, g_build_filename (priv->config_dir, name, NULL));
-				if (confs->len == 1)
-					g_string_append (config_description, " and conf.d: ");
-				else
-					g_string_append (config_description, ", ");
-				g_string_append (config_description, name);
-			}
-			g_object_unref (info);
+		desc = read_conf_dir (NM_DEFAULT_VENDOR_CONF_DIR, error);
+		if (!singleton)
+			return FALSE;
+		if (desc) {
+			g_string_append (config_description, " and vendor conf.d: ");
+			g_string_append (config_description, desc);
+			g_free (desc);
 		}
-		g_object_unref (direnum);
 	}
-	g_object_unref (dir);
 
-	g_ptr_array_sort (confs, sort_asciibetically);
-	priv->config_description = g_string_free (config_description, FALSE);
-	for (i = 0; i < confs->len; i++) {
-		if (!read_config (singleton, confs->pdata[i], error)) {
-			g_object_unref (singleton);
-			singleton = NULL;
-			break;
-		}
-	}
-	g_ptr_array_unref (confs);
+	desc = read_conf_dir (priv->config_dir, error);
 	if (!singleton)
 		return FALSE;
+	if (desc) {
+		g_string_append (config_description, " and user conf.d: ");
+		g_string_append (config_description, desc);
+		g_free (desc);
+	}
+
+	priv->config_description = g_string_free (config_description, FALSE);
 
 	/* Handle no-auto-default key and state file */
 	priv->no_auto_default = g_key_file_get_string_list (priv->keyfile, "main", "no-auto-default", NULL, NULL);

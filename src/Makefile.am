@@ -412,6 +412,7 @@ AM_CPPFLAGS += \
 	-DSYSCONFDIR=\"$(sysconfdir)\" \
 	-DRUNDIR=\"$(rundir)\" \
 	\
+	-DNMVENDORCONFDIR=\"$(nmvendorconfdir)\" \
 	-DNMCONFDIR=\"$(nmconfdir)\" \
 	-DNMLOCALEDIR=\"$(datadir)/locale\" \
 	-DNMPLUGINDIR=\"$(pkglibdir)\" \

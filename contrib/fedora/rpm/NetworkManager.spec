@@ -443,10 +443,14 @@ make install DESTDIR=$RPM_BUILD_ROOT
 
 %{__cp} %{SOURCE1} $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/
 
+# Vendor configuration
+mkdir -p $RPM_BUILD_ROOT%{_prefix}/lib/%{name}/conf.d
+%{__cp} %{SOURCE2} $RPM_BUILD_ROOT%{_prefix}/lib/%{name}/conf.d
+%{__cp} %{SOURCE3} $RPM_BUILD_ROOT%{_prefix}/lib/%{name}/conf.d
+%{__cp} %{SOURCE4} $RPM_BUILD_ROOT%{_prefix}/lib/%{name}/conf.d
+
+# User configuration
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/conf.d
-%{__cp} %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/conf.d
-%{__cp} %{SOURCE3} $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/conf.d
-%{__cp} %{SOURCE4} $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/conf.d
 
 # create a VPN directory
 %{__mkdir_p} $RPM_BUILD_ROOT%{_sysconfdir}/NetworkManager/VPN
@@ -538,7 +542,9 @@ fi
 %if 0%{?with_nmtui}
 %exclude %{_mandir}/man1/nmtui*
 %endif
-%config %{_sysconfdir}/%{name}/conf.d/10-ibft-plugin.conf
+%dir %{_prefix}/lib/%{name}/
+%dir %{_prefix}/lib/%{name}/conf.d
+%{_prefix}/lib/%{name}/conf.d/10-ibft-plugin.conf
 %{_mandir}/man1/*
 %{_mandir}/man5/*
 %{_mandir}/man8/*
@@ -655,15 +661,15 @@ fi
 
 %files config-connectivity-fedora
 %defattr(-,root,root,0755)
-%dir %{_sysconfdir}/%{name}
-%dir %{_sysconfdir}/%{name}/conf.d
-%config(noreplace) %{_sysconfdir}/%{name}/conf.d/20-connectivity-fedora.conf
+%dir %{_prefix}/lib/%{name}
+%dir %{_prefix}/lib/%{name}/conf.d
+%{_prefix}/lib/%{name}/conf.d/20-connectivity-fedora.conf
 
 %files config-server
 %defattr(-,root,root,0755)
-%dir %{_sysconfdir}/%{name}
-%dir %{_sysconfdir}/%{name}/conf.d
-%config(noreplace) %{_sysconfdir}/%{name}/conf.d/00-server.conf
+%dir %{_prefix}/lib/%{name}
+%dir %{_prefix}/lib/%{name}/conf.d
+%{_prefix}/lib/%{name}/conf.d/00-server.conf
 
 %if 0%{?with_nmtui}
 %files tui
