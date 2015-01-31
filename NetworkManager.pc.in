@@ -6,6 +6,7 @@ libgnome_serverdir=@libexecdir@
 plugindir=@libdir@/NetworkManager
 userconfigdir=@sysconfdir@/NetworkManager
 configdir=@prefix@/lib/NetworkManager
+vpnnamedir=@prefix@/lib/NetworkManager/VPN
 
 Name: NetworkManager
 Description: System for maintaining active network connection

@@ -452,7 +452,8 @@ mkdir -p $RPM_BUILD_ROOT%{_prefix}/lib/%{name}/conf.d
 # User configuration
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/conf.d
 
-# create a VPN directory
+# create VPN name file directories
+%{__mkdir_p} $RPM_BUILD_ROOT%{_prefix}/lib/NetworkManager/VPN
 %{__mkdir_p} $RPM_BUILD_ROOT%{_sysconfdir}/NetworkManager/VPN
 
 # create a keyfile plugin system settings directory
@@ -531,6 +532,7 @@ fi
 %{_sysconfdir}/%{name}/dispatcher.d/pre-up.d/10-ifcfg-rh-routes.sh
 %dir %{_sysconfdir}/%{name}/dnsmasq.d
 %dir %{_sysconfdir}/%{name}/VPN
+%dir %{_prefix}/lib/%{name}/VPN
 %config(noreplace) %{_sysconfdir}/%{name}/NetworkManager.conf
 %{_bindir}/nm-online
 %{_libexecdir}/nm-dhcp-helper

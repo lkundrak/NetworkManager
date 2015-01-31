@@ -33,7 +33,8 @@
 #include "nm-enum-types.h"
 #include "nm-logging.h"
 
-#define VPN_NAME_FILES_DIR NMCONFDIR "/VPN"
+#define VPN_NAME_FILES_DIR NMVENDORCONFDIR "/VPN"
+#define OLD_VPN_NAME_FILES_DIR NMCONFDIR "/VPN"
 
 G_DEFINE_TYPE (NMVpnManager, nm_vpn_manager, G_TYPE_OBJECT)
 
@@ -43,6 +44,8 @@ typedef struct {
 	GHashTable *services;
 	GFileMonitor *monitor;
 	guint monitor_id;
+	GFileMonitor *old_monitor;
+	guint old_monitor_id;
 } NMVpnManagerPrivate;
 
 
@@ -203,39 +206,47 @@ vpn_dir_changed (GFileMonitor *monitor,
 NM_DEFINE_SINGLETON_GETTER (NMVpnManager, nm_vpn_manager_get, NM_TYPE_VPN_MANAGER);
 
 static void
-nm_vpn_manager_init (NMVpnManager *self)
+read_dir (NMVpnManager *self, const char *dirname, GFileMonitor **monitor, guint *monitor_id)
 {
-	NMVpnManagerPrivate *priv = NM_VPN_MANAGER_GET_PRIVATE (self);
 	GFile *file;
 	GDir *dir;
 	const char *fn;
 	char *path;
 
-	priv->services = g_hash_table_new_full (g_str_hash, g_str_equal,
-	                                        NULL, g_object_unref);
-
 	/* Watch the VPN directory for changes */
-	file = g_file_new_for_path (VPN_NAME_FILES_DIR "/");
-	priv->monitor = g_file_monitor_directory (file, G_FILE_MONITOR_NONE, NULL, NULL);
+	file = g_file_new_for_path (dirname);
+	*monitor = g_file_monitor_directory (file, G_FILE_MONITOR_NONE, NULL, NULL);
 	g_object_unref (file);
-	if (priv->monitor) {
-		priv->monitor_id = g_signal_connect (priv->monitor, "changed",
-		                                     G_CALLBACK (vpn_dir_changed), self);
+	if (*monitor) {
+		*monitor_id = g_signal_connect (*monitor, "changed",
+		                                G_CALLBACK (vpn_dir_changed), self);
 	}
 
 	/* Load VPN service files */
-	dir = g_dir_open (VPN_NAME_FILES_DIR, 0, NULL);
+	dir = g_dir_open (dirname, 0, NULL);
 	if (dir) {
 		while ((fn = g_dir_read_name (dir))) {
 			/* only parse filenames that end with .name */
 			if (g_str_has_suffix (fn, ".name")) {
-				path = g_build_filename (VPN_NAME_FILES_DIR, fn, NULL);
+				path = g_build_filename (dirname, fn, NULL);
 				try_add_service (self, path);
 				g_free (path);
 			}
 		}
 		g_dir_close (dir);
 	}
+}
+
+static void
+nm_vpn_manager_init (NMVpnManager *self)
+{
+	NMVpnManagerPrivate *priv = NM_VPN_MANAGER_GET_PRIVATE (self);
+
+	priv->services = g_hash_table_new_full (g_str_hash, g_str_equal,
+	                                        NULL, g_object_unref);
+
+	read_dir (self, VPN_NAME_FILES_DIR, &priv->monitor, &priv->monitor_id);
+	read_dir (self, OLD_VPN_NAME_FILES_DIR, &priv->old_monitor, &priv->old_monitor_id);
 }
 
 static void
@@ -263,6 +274,13 @@ dispose (GObject *object)
 			g_signal_handler_disconnect (priv->monitor, priv->monitor_id);
 		g_file_monitor_cancel (priv->monitor);
 		g_clear_object (&priv->monitor);
+	}
+
+	if (priv->old_monitor) {
+		if (priv->old_monitor_id)
+			g_signal_handler_disconnect (priv->old_monitor, priv->old_monitor_id);
+		g_file_monitor_cancel (priv->old_monitor);
+		g_clear_object (&priv->old_monitor);
 	}
 
 	if (priv->services) {
