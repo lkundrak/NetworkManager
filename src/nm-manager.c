@@ -3017,6 +3017,24 @@ nm_manager_activate_connection (NMManager *self,
 	return active;
 }
 
+static NMDevice *
+nm_manager_get_connection_device (NMManager *self,
+                                  NMConnection *connection)
+{
+	const GSList *connections, *iter;
+
+	connections = nm_manager_get_active_connections (self);
+	for (iter = connections; iter; iter = g_slist_next (iter)) {
+		NMActiveConnection *ac = NM_ACTIVE_CONNECTION (iter->data);
+		NMConnection *c = nm_active_connection_get_connection (ac);
+
+		if (c == connection)
+			return nm_active_connection_get_device (ac);
+	}
+
+	return NULL;
+}
+
 static NMAuthSubject *
 validate_activation_request (NMManager *self,
                              DBusGMethodInvocation *context,
@@ -3089,6 +3107,10 @@ validate_activation_request (NMManager *self,
 			goto error;
 		}
 	} else {
+		device = nm_manager_get_connection_device (self, connection);
+	}
+
+	if (!device) {
 		gboolean is_software = nm_connection_is_virtual (connection);
 
 		/* VPN and software-device connections don't need a device yet */
