@@ -2052,7 +2052,7 @@ nmc_activate_connection (NmCli *nmc,
 	g_return_val_if_fail (nmc != NULL, FALSE);
 	g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-	if (connection) {
+	if (connection && ifname) {
 		device_found = find_device_for_connection (nmc, connection, ifname, ap, nsp, &device, &spec_object, &local);
 
 		/* Virtual connection may not have their interfaces created yet */
@@ -2063,6 +2063,11 @@ nmc_activate_connection (NmCli *nmc,
 			return FALSE;
 		}
 		g_clear_error (&local);
+	} else if (connection) {
+		/* Only try to find a device if the connection is not active already,
+		 * otherwise just let the server choose. */
+		if (!get_ac_for_connection (nm_client_get_active_connections (nmc->client), connection))
+			find_device_for_connection (nmc, connection, ifname, ap, nsp, &device, &spec_object, NULL);
 	} else if (ifname) {
 		device = nm_client_get_device_by_iface (nmc->client, ifname);
 		if (!device) {
