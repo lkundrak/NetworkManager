@@ -665,7 +665,7 @@ nm_platform_link_get_unmanaged (int ifindex, gboolean *managed)
 {
 	reset_error ();
 
-	g_return_val_if_fail (klass->link_get_unmanaged, NULL);
+	g_return_val_if_fail (klass->link_get_unmanaged, FALSE);
 
 	return klass->link_get_unmanaged (platform, ifindex, managed);
 }
