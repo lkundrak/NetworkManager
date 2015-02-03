@@ -2678,7 +2678,7 @@ _internal_activate_vpn (NMManager *self, NMActiveConnection *active, GError **er
 static gboolean
 _internal_activate_device (NMManager *self, NMActiveConnection *active, GError **error)
 {
-	NMDevice *device, *master_device = NULL;
+	NMDevice *device, *existing, *master_device = NULL;
 	NMConnection *connection;
 	NMConnection *master_connection = NULL;
 	NMActiveConnection *master_ac = NULL;
@@ -2762,14 +2762,6 @@ _internal_activate_device (NMManager *self, NMActiveConnection *active, GError *
 		}
 	}
 
-	/* Final connection must be available on device */
-	if (!nm_device_connection_is_available (device, connection, TRUE)) {
-		g_set_error (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_UNKNOWN_CONNECTION,
-		             "Connection '%s' is not available on the device %s at this time.",
-		             nm_connection_get_id (connection), nm_device_get_iface (device));
-		return FALSE;
-	}
-
 	/* If this is an autoconnect request, but the device isn't allowing autoconnect
 	 * right now, we reject it.
 	 */
@@ -2830,6 +2822,24 @@ _internal_activate_device (NMManager *self, NMActiveConnection *active, GError *
 		            nm_active_connection_get_path (master_ac));
 	}
 
+	existing = nm_manager_get_connection_device (self, connection);
+	if (existing) {
+		/* Deactivate existing activation request first */
+		nm_log_dbg (LOGD_CORE, "disconnecting for new activation request.");
+		nm_device_state_changed (existing,
+					 NM_DEVICE_STATE_DEACTIVATING,
+					 NM_DEVICE_STATE_REASON_NONE);
+	}
+
+	/* Final connection must be available on device */
+	if (!nm_device_connection_is_available (device, connection, TRUE)) {
+		g_set_error (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_UNKNOWN_CONNECTION,
+		             "Connection '%s' is not available on the device %s at this time.",
+		             nm_connection_get_id (connection), nm_device_get_iface (device));
+		return FALSE;
+	}
+
+
 	/* Export the new ActiveConnection to clients and start it on the device */
 	nm_active_connection_export (active);
 	g_object_notify (G_OBJECT (self), NM_MANAGER_ACTIVE_CONNECTIONS);
@@ -2867,6 +2877,7 @@ _internal_activate_generic (NMManager *self, NMActiveConnection *active, GError 
 		 * is exported, make sure the manager's activating-connection property
 		 * is up-to-date.
 		 */
+		active_connection_add (self, active);
 		policy_activating_device_changed (G_OBJECT (priv->policy), NULL, self);
 	}
 
@@ -2936,18 +2947,6 @@ _new_active_connection (NMManager *self,
 		return NULL;
 	}
 
-	if (existing_ac) {
-		NMDevice *existing_device = nm_active_connection_get_device (existing_ac);
-
-		if (existing_device != device) {
-			g_set_error (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_CONNECTION_ALREADY_ACTIVE,
-			             "Connection '%s' is already active on %s",
-			             nm_connection_get_id (connection),
-			             nm_device_get_iface (existing_device));
-			return NULL;
-		}
-	}
-
 	/* Normalize the specific object */
 	if (specific_object && g_strcmp0 (specific_object, "/") == 0)
 		specific_object = NULL;
@@ -2979,7 +2978,6 @@ _internal_activation_failed (NMManager *self,
 		nm_active_connection_set_state (active, NM_ACTIVE_CONNECTION_STATE_DEACTIVATING);
 		nm_active_connection_set_state (active, NM_ACTIVE_CONNECTION_STATE_DEACTIVATED);
 	}
-	active_connection_remove (self, active);
 }
 
 static void
@@ -3057,10 +3055,8 @@ nm_manager_activate_connection (NMManager *self,
 	                                 device,
 	                                 subject,
 	                                 error);
-	if (active) {
+	if (active)
 		nm_active_connection_authorize (active, _internal_activation_auth_done, self, NULL);
-		active_connection_add (self, active);
-	}
 	return active;
 }
 
@@ -3307,7 +3303,6 @@ impl_manager_activate_connection (NMManager *self,
 		goto error;
 
 	nm_active_connection_authorize (active, _activation_auth_done, self, context);
-	active_connection_add (self, active);
 	g_clear_object (&subject);
 	return;
 
@@ -3385,8 +3380,6 @@ _add_and_activate_auth_done (NMActiveConnection *active,
 		                                 activation_add_done,
 		                                 info);
 	} else {
-		active_connection_remove (self, active);
-
 		g_assert (error_desc);
 		error = g_error_new_literal (NM_MANAGER_ERROR,
 		                             NM_MANAGER_ERROR_PERMISSION_DENIED,
@@ -3493,7 +3486,6 @@ impl_manager_add_and_activate_connection (NMManager *self,
 		goto error;
 
 	nm_active_connection_authorize (active, _add_and_activate_auth_done, self, context);
-	active_connection_add (self, active);
 	g_object_unref (connection);
 	g_object_unref (subject);
 	return;
