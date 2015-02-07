@@ -386,6 +386,14 @@ set_property (GObject *object, guint property_id,
 		break;
 	case PROP_INTERVAL:
 		interval = g_value_get_uint (value);
+		if (interval == 0) {
+			/* NMConfig just sets zero when the configuratoin value is in fact missing.
+			 * No big deal, use defaults. An interval of zero makes no sense anyway. */
+			GValue def = G_VALUE_INIT;
+			g_value_init (&def, G_TYPE_UINT);
+			g_param_value_set_default (pspec, &def);
+			interval = g_value_get_uint (&def);
+		}
 		if (priv->interval != interval) {
 			priv->interval = interval;
 			_reschedule_periodic_checks (self, TRUE);
