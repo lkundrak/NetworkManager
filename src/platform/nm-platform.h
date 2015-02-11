@@ -351,6 +351,7 @@ typedef struct {
 	const char *(*link_get_name) (NMPlatform *, int ifindex);
 	NMLinkType (*link_get_type) (NMPlatform *, int ifindex);
 	const char *(*link_get_type_name) (NMPlatform *, int ifindex);
+	gboolean (*link_get_unmanaged) (NMPlatform *, int ifindex, gboolean *managed);
 
 	gboolean (*link_refresh) (NMPlatform *, int ifindex);
 
@@ -498,6 +499,7 @@ int nm_platform_link_get_ifindex (const char *name);
 const char *nm_platform_link_get_name (int ifindex);
 NMLinkType nm_platform_link_get_type (int ifindex);
 const char *nm_platform_link_get_type_name (int ifindex);
+gboolean nm_platform_link_get_unmanaged (int ifindex, gboolean *managed);
 gboolean nm_platform_link_is_software (int ifindex);
 gboolean nm_platform_link_supports_slaves (int ifindex);
 
@@ -595,9 +597,6 @@ gboolean nm_platform_ip4_route_delete (int ifindex, in_addr_t network, int plen,
 gboolean nm_platform_ip6_route_delete (int ifindex, struct in6_addr network, int plen, guint32 metric);
 gboolean nm_platform_ip4_route_exists (int ifindex, in_addr_t network, int plen, guint32 metric);
 gboolean nm_platform_ip6_route_exists (int ifindex, struct in6_addr network, int plen, guint32 metric);
-gboolean nm_platform_ip4_route_sync (int ifindex, const GArray *known_routes);
-gboolean nm_platform_ip6_route_sync (int ifindex, const GArray *known_routes);
-gboolean nm_platform_route_flush (int ifindex);
 
 const char *nm_platform_link_to_string (const NMPlatformLink *link);
 const char *nm_platform_ip4_address_to_string (const NMPlatformIP4Address *address);

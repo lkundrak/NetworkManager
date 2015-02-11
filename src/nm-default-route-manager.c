@@ -1354,10 +1354,14 @@ dispose (GObject *object)
 	NMDefaultRouteManagerPrivate *priv = NM_DEFAULT_ROUTE_MANAGER_GET_PRIVATE (self);
 
 	if (priv->entries_ip4) {
+		while (priv->entries_ip4->len)
+			_entry_at_idx_remove (&vtable_ip4, self, priv->entries_ip4->len - 1);
 		g_ptr_array_free (priv->entries_ip4, TRUE);
 		priv->entries_ip4 = NULL;
 	}
 	if (priv->entries_ip6) {
+		while (priv->entries_ip6->len)
+			_entry_at_idx_remove (&vtable_ip6, self, priv->entries_ip6->len - 1);
 		g_ptr_array_free (priv->entries_ip6, TRUE);
 		priv->entries_ip6 = NULL;
 	}

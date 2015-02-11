@@ -32,6 +32,7 @@
 #include "nm-dbus-manager.h"
 #include "nm-dbus-glib-types.h"
 #include "nm-ip6-config-glue.h"
+#include "nm-route-manager.h"
 #include "NetworkManagerUtils.h"
 
 G_DEFINE_TYPE (NMIP6Config, nm_ip6_config, G_TYPE_OBJECT)
@@ -49,6 +50,7 @@ typedef struct {
 	GPtrArray *domains;
 	GPtrArray *searches;
 	guint32 mss;
+	int ifindex;
 } NMIP6ConfigPrivate;
 
 
@@ -96,6 +98,17 @@ nm_ip6_config_get_dbus_path (const NMIP6Config *config)
 }
 
 /******************************************************************/
+
+void
+nm_ip6_config_set_ifindex (NMIP6Config *config, int ifindex)
+{
+	NMIP6ConfigPrivate *priv = NM_IP6_CONFIG_GET_PRIVATE (config);
+
+	g_return_if_fail (priv->ifindex == 0);
+	g_assert (priv->routes->len == 0);
+
+	priv->ifindex = ifindex;
+}
 
 static gboolean
 same_prefix (const struct in6_addr *address1, const struct in6_addr *address2, int plen)
@@ -303,6 +316,7 @@ nm_ip6_config_capture (int ifindex, gboolean capture_resolv_conf, NMSettingIP6Co
 
 	config = nm_ip6_config_new ();
 	priv = NM_IP6_CONFIG_GET_PRIVATE (config);
+	nm_ip6_config_set_ifindex (config, ifindex);
 
 	g_array_unref (priv->addresses);
 	g_array_unref (priv->routes);
@@ -396,7 +410,7 @@ nm_ip6_config_commit (const NMIP6Config *config, int ifindex)
 			g_array_append_vals (routes, route, 1);
 		}
 
-		success = nm_platform_ip6_route_sync (ifindex, routes);
+		success = nm_route_manager_ip6_route_sync (nm_route_manager_get (), ifindex, routes);
 		g_array_unref (routes);
 	}
 
@@ -888,6 +902,12 @@ nm_ip6_config_replace (NMIP6Config *dst, const NMIP6Config *src, gboolean *relev
 
 	g_object_freeze_notify (G_OBJECT (dst));
 
+	/* ifindex */
+	if (src_priv->ifindex != dst_priv->ifindex) {
+		nm_ip6_config_set_ifindex (dst, src_priv->ifindex);
+		has_minor_changes = TRUE;
+	}
+
 	/* never_default */
 	if (src_priv->never_default != dst_priv->never_default) {
 		dst_priv->never_default = src_priv->never_default;
@@ -1259,6 +1279,7 @@ nm_ip6_config_add_route (NMIP6Config *config, const NMPlatformIP6Route *new)
 
 	g_return_if_fail (new != NULL);
 	g_return_if_fail (new->plen > 0);
+	g_assert (priv->ifindex);
 
 	for (i = 0; i < priv->routes->len; i++ ) {
 		NMPlatformIP6Route *item = &g_array_index (priv->routes, NMPlatformIP6Route, i);
@@ -1275,6 +1296,7 @@ nm_ip6_config_add_route (NMIP6Config *config, const NMPlatformIP6Route *new)
 	}
 
 	g_array_append_val (priv->routes, *new);
+	g_array_index (priv->routes, NMPlatformIP6Route, priv->routes->len - 1).ifindex = priv->ifindex;
 NOTIFY:
 	_NOTIFY (config, PROP_ROUTE_DATA);
 	_NOTIFY (config, PROP_ROUTES);

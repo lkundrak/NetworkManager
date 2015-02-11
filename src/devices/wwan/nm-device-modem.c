@@ -165,6 +165,7 @@ modem_ip4_config_result (NMModem *modem,
 
 		nm_device_state_changed (device, NM_DEVICE_STATE_FAILED, NM_DEVICE_STATE_REASON_IP_CONFIG_UNAVAILABLE);
 	} else {
+		nm_ip4_config_set_ifindex (config, nm_device_get_ifindex (device));
 		nm_device_set_wwan_ip4_config (device, config);
 		nm_device_activate_schedule_ip4_config_result (device, NULL);
 	}
@@ -197,8 +198,10 @@ modem_ip6_config_result (NMModem *modem,
 	/* Re-enable IPv6 on the interface */
 	nm_device_ipv6_sysctl_set (device, "disable_ipv6", "0");
 
-	if (config)
+	if (config) {
+		nm_ip6_config_set_ifindex (config, nm_device_get_ifindex (device));
 		nm_device_set_wwan_ip6_config (device, config);
+	}
 
 	if (do_slaac == FALSE) {
 		if (got_config)

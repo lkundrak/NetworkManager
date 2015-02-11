@@ -87,6 +87,7 @@ dhcp4_state_changed (NMDhcpClient *client,
 		if (last_config) {
 			g_object_unref (last_config);
 			last_config = nm_ip4_config_new ();
+			nm_ip4_config_set_ifindex (last_config, nm_dhcp_client_get_ifindex (client));
 			nm_ip4_config_replace (last_config, ip4_config, NULL);
 		}
 		break;
@@ -136,6 +137,7 @@ rdisc_config_changed (NMRDisc *rdisc, NMRDiscConfigMap changed, gpointer user_da
 	}
 
 	ip6_config = nm_ip6_config_new ();
+	nm_ip6_config_set_ifindex (ip6_config, ifindex);
 
 	if (changed & NM_RDISC_CONFIG_GATEWAYS) {
 		/* Use the first gateway as ordered in router discovery cache. */
@@ -231,6 +233,7 @@ rdisc_config_changed (NMRDisc *rdisc, NMRDiscConfigMap changed, gpointer user_da
 	if (last_config) {
 		g_object_unref (last_config);
 		last_config = nm_ip6_config_new ();
+		nm_ip6_config_set_ifindex (last_config, ifindex);
 		nm_ip6_config_replace (last_config, ip6_config, NULL);
 	}
 }
