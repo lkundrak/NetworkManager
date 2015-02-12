@@ -69,7 +69,6 @@ typedef struct {
 	gboolean monitor_connection_files;
 	gboolean auth_polkit;
 	char *dhcp_client;
-	char *dns_mode;
 
 	char *log_level;
 	char *log_domains;
@@ -194,14 +193,6 @@ nm_config_get_dhcp_client (NMConfig *config)
 	g_return_val_if_fail (config != NULL, NULL);
 
 	return NM_CONFIG_GET_PRIVATE (config)->dhcp_client;
-}
-
-const char *
-nm_config_get_dns_mode (NMConfig *config)
-{
-	g_return_val_if_fail (config != NULL, NULL);
-
-	return NM_CONFIG_GET_PRIVATE (config)->dns_mode;
 }
 
 const char *
@@ -852,7 +843,6 @@ init_sync (GInitable *initable, GCancellable *cancellable, GError **error)
 	priv->auth_polkit = _get_bool_value (keyfile, "main", "auth-polkit", NM_CONFIG_DEFAULT_AUTH_POLKIT);
 
 	priv->dhcp_client = g_key_file_get_value (keyfile, "main", "dhcp", NULL);
-	priv->dns_mode = g_key_file_get_value (keyfile, "main", "dns", NULL);
 
 	priv->log_level = g_key_file_get_value (keyfile, "logging", "level", NULL);
 	priv->log_domains = g_key_file_get_value (keyfile, "logging", "domains", NULL);
@@ -906,7 +896,6 @@ finalize (GObject *gobject)
 	g_free (priv->no_auto_default_file);
 	g_strfreev (priv->plugins);
 	g_free (priv->dhcp_client);
-	g_free (priv->dns_mode);
 	g_free (priv->log_level);
 	g_free (priv->log_domains);
 	g_free (priv->debug);
