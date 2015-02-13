@@ -38,7 +38,6 @@
 #include "nm-setting-ip4-config.h"
 #include "nm-setting-connection.h"
 #include "nm-platform.h"
-#include "nm-dns-manager.h"
 #include "nm-vpn-manager.h"
 #include "nm-auth-utils.h"
 #include "nm-firewall-manager.h"
@@ -72,7 +71,6 @@ typedef struct {
 	GResolver *resolver;
 	GInetAddress *lookup_addr;
 	GCancellable *lookup_cancellable;
-	NMDnsManager *dns_manager;
 	gulong config_changed_id;
 
 	gint reset_retries_id;  /* idle handler for resetting the retries count */

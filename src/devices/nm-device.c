@@ -66,7 +66,6 @@
 #include "nm-dbus-glib-types.h"
 #include "nm-dispatcher.h"
 #include "nm-config.h"
-#include "nm-dns-manager.h"
 #include "nm-core-internal.h"
 #include "nm-default-route-manager.h"
 #include "nm-route-manager.h"
@@ -6586,14 +6585,12 @@ update_ip_config (NMDevice *self, gboolean initial)
 	int ifindex;
 	gboolean linklocal6_just_completed = FALSE;
 	gboolean capture_resolv_conf;
-	NMDnsManagerResolvConfMode resolv_conf_mode;
 
 	ifindex = nm_device_get_ip_ifindex (self);
 	if (!ifindex)
 		return;
 
-	resolv_conf_mode = nm_dns_manager_get_resolv_conf_mode (nm_dns_manager_get ());
-	capture_resolv_conf = initial && (resolv_conf_mode == NM_DNS_MANAGER_RESOLV_CONF_EXPLICIT);
+	capture_resolv_conf = nm_manager_get_resolv_conf_explicit (nm_manager_get ());
 
 	/* IPv4 */
 	g_clear_object (&priv->ext_ip4_config);

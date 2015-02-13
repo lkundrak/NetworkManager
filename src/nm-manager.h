@@ -93,6 +93,7 @@ void          nm_manager_stop                          (NMManager *manager);
 NMState       nm_manager_get_state                     (NMManager *manager);
 const GSList *nm_manager_get_active_connections        (NMManager *manager);
 GSList *      nm_manager_get_activatable_connections   (NMManager *manager);
+gboolean      nm_manager_get_resolv_conf_explicit      (NMManager *manager);
 
 /* Device handling */
 

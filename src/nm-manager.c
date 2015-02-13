@@ -54,6 +54,7 @@
 #include "nm-enum-types.h"
 #include "nm-sleep-monitor.h"
 #include "nm-connectivity.h"
+#include "nm-dns-manager.h"
 #include "nm-policy.h"
 #include "nm-connection-provider.h"
 #include "nm-session-monitor.h"
@@ -169,6 +170,7 @@ typedef struct {
 	NMState state;
 	NMConfig *config;
 	NMConnectivity *connectivity;
+	NMDnsManager *dns_manager;
 
 	int ignore_link_added_cb;
 
@@ -442,6 +444,12 @@ nm_manager_get_activatable_connections (NMManager *manager)
 
 	g_slist_free (all_connections);
 	return g_slist_reverse (connections);
+}
+
+gboolean
+nm_manager_get_resolv_conf_explicit (NMManager *manager)
+{
+	return FALSE;
 }
 
 static NMActiveConnection *
@@ -4808,6 +4816,7 @@ nm_manager_new (NMSettings *settings,
 	                                          nm_config_data_get_connectivity_response (config_data));
 	g_signal_connect (priv->connectivity, "notify::" NM_CONNECTIVITY_STATE,
 	                  G_CALLBACK (connectivity_changed), singleton);
+	priv->dns_manager = nm_dns_manager_new (nm_config_data_get_dns_mode (config_data));
 
 	if (!dbus_connection_add_filter (dbus_connection, prop_filter, singleton, NULL)) {
 		g_set_error_literal (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_FAILED,
@@ -5134,6 +5143,8 @@ dispose (GObject *object)
 		g_signal_handlers_disconnect_by_func (priv->connectivity, connectivity_changed, manager);
 		g_clear_object (&priv->connectivity);
 	}
+	if (priv->dns_manager)
+		g_clear_object (&priv->dns_manager);
 
 	g_free (priv->hostname);
 
