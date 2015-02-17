@@ -270,28 +270,11 @@ active_connection_remove (NMManager *self, NMActiveConnection *active)
 	/* FIXME: switch to a GList for faster removal */
 	found = g_slist_find (priv->active_connections, active);
 	if (found) {
-		NMConnection *connection;
-
 		priv->active_connections = g_slist_remove (priv->active_connections, active);
 		g_signal_emit (self, signals[ACTIVE_CONNECTION_REMOVED], 0, active);
 		g_signal_handlers_disconnect_by_func (active, active_connection_state_changed, self);
 		g_signal_handlers_disconnect_by_func (active, active_connection_default_changed, self);
-
-		if (   nm_active_connection_get_assumed (active)
-		    && (connection = nm_active_connection_get_connection (active))
-		    && nm_settings_connection_get_nm_generated_assumed (NM_SETTINGS_CONNECTION (connection)))
-			g_object_ref (connection);
-		else
-			connection = NULL;
-
 		g_object_unref (active);
-
-		if (connection) {
-			nm_log_dbg (LOGD_DEVICE, "Assumed connection disconnected. Deleting generated connection '%s' (%s)",
-			            nm_connection_get_id (connection), nm_connection_get_uuid (connection));
-			nm_settings_connection_delete (NM_SETTINGS_CONNECTION (connection), NULL, NULL);
-			g_object_unref (connection);
-		}
 	}
 
 	return found && notify;
@@ -3474,6 +3457,20 @@ error:
 
 /***********************************************************************/
 
+static void
+connection_remove_if_assumed (NMActiveConnection *active)
+{
+	NMConnection *connection;
+
+	if (   nm_active_connection_get_assumed (active)
+	    && (connection = nm_active_connection_get_connection (active))
+	    && nm_settings_connection_get_nm_generated_assumed (NM_SETTINGS_CONNECTION (connection))) {
+		nm_log_dbg (LOGD_DEVICE, "Assumed connection disconnected. Deleting generated connection '%s' (%s)",
+			    nm_connection_get_id (connection), nm_connection_get_uuid (connection));
+		nm_settings_connection_delete (NM_SETTINGS_CONNECTION (connection), NULL, NULL);
+	}
+}
+
 gboolean
 nm_manager_deactivate_connection (NMManager *manager,
                                   const char *connection_path,
@@ -3506,6 +3503,10 @@ nm_manager_deactivate_connection (NMManager *manager,
 		nm_device_state_changed (nm_active_connection_get_device (active),
 		                         NM_DEVICE_STATE_DEACTIVATING,
 		                         reason);
+
+		if (reason != NM_DEVICE_STATE_REASON_CONNECTION_REMOVED)
+			connection_remove_if_assumed (active);
+
 		success = TRUE;
 	}
 
