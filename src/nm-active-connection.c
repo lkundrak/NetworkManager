@@ -221,6 +221,16 @@ nm_active_connection_get_connection_type (NMActiveConnection *self)
 	return nm_connection_get_connection_type (priv->connection);
 }
 
+static void
+connection_removed (NMSettingsConnection *connection, gpointer user_data)
+{
+	NMActiveConnection *self = NM_ACTIVE_CONNECTION (user_data);
+	NMActiveConnectionPrivate *priv = NM_ACTIVE_CONNECTION_GET_PRIVATE (self);
+
+	g_signal_handlers_disconnect_by_func (connection, G_CALLBACK (connection_removed), self);
+	g_clear_object (&priv->connection);
+}
+
 void
 nm_active_connection_set_connection (NMActiveConnection *self,
                                      NMConnection *connection)
@@ -234,6 +244,8 @@ nm_active_connection_set_connection (NMActiveConnection *self,
 	if (priv->connection)
 		g_object_unref (priv->connection);
 	priv->connection = g_object_ref (connection);
+	g_signal_connect (priv->connection, NM_SETTINGS_CONNECTION_REMOVED,
+	                  G_CALLBACK (connection_removed), self);
 }
 
 const char *
@@ -715,8 +727,7 @@ set_property (GObject *object, guint prop_id,
 
 	switch (prop_id) {
 	case PROP_INT_CONNECTION:
-		g_warn_if_fail (priv->connection == NULL);
-		priv->connection = g_value_dup_object (value);
+		nm_active_connection_set_connection (NM_ACTIVE_CONNECTION (object), g_value_dup_object (value));
 		break;
 	case PROP_INT_DEVICE:
 		nm_active_connection_set_device (NM_ACTIVE_CONNECTION (object), g_value_get_object (value));
@@ -863,6 +874,11 @@ dispose (GObject *object)
 	g_free (priv->specific_object);
 	priv->specific_object = NULL;
 
+	if (priv->connection) {
+		g_signal_handlers_disconnect_by_func (priv->connection,
+		                                      G_CALLBACK (connection_removed),
+		                                      self);
+	}
 	g_clear_object (&priv->connection);
 
 	_device_cleanup (self);

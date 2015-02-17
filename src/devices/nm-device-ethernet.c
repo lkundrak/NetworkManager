@@ -286,8 +286,10 @@ clear_secrets_tries (NMDevice *device)
 	req = nm_device_get_act_request (device);
 	if (req) {
 		connection = nm_act_request_get_connection (req);
-		/* Clear wired secrets tries on success, failure, or when deactivating */
-		g_object_set_data (G_OBJECT (connection), WIRED_SECRETS_TRIES, NULL);
+		if (connection) {
+			/* Clear wired secrets tries on success, failure, or when deactivating */
+			g_object_set_data (G_OBJECT (connection), WIRED_SECRETS_TRIES, NULL);
+		}
 	}
 }
 
