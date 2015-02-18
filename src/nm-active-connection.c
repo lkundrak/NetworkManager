@@ -771,16 +771,22 @@ get_property (GObject *object, guint prop_id,
 
 	switch (prop_id) {
 	case PROP_CONNECTION:
-		g_value_set_boxed (value, nm_connection_get_path (priv->connection));
+		if (priv->connection)
+			g_value_set_boxed (value, nm_connection_get_path (priv->connection));
+		else
+			g_value_set_boxed (value, "/");
 		break;
 	case PROP_ID:
-		g_value_set_string (value, nm_connection_get_id (priv->connection));
+		if (priv->connection)
+			g_value_set_string (value, nm_connection_get_id (priv->connection));
 		break;
 	case PROP_UUID:
-		g_value_set_string (value, nm_connection_get_uuid (priv->connection));
+		if (priv->connection)
+			g_value_set_string (value, nm_connection_get_uuid (priv->connection));
 		break;
 	case PROP_TYPE:
-		g_value_set_string (value, nm_connection_get_connection_type (priv->connection));
+		if (priv->connection)
+			g_value_set_string (value, nm_connection_get_connection_type (priv->connection));
 		break;
 	case PROP_SPECIFIC_OBJECT:
 		g_value_set_boxed (value, priv->specific_object ? priv->specific_object : "/");

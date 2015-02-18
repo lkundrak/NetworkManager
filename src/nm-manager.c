@@ -411,7 +411,8 @@ find_ac_for_connection (NMManager *manager, NMConnection *connection)
 		ac_connection = nm_active_connection_get_connection (ac);
 		ac_state = nm_active_connection_get_state (ac);
 
-		if (   !strcmp (nm_connection_get_uuid (ac_connection), uuid)
+		if (   ac_connection
+		    && !strcmp (nm_connection_get_uuid (ac_connection), uuid)
 		    && (ac_state < NM_ACTIVE_CONNECTION_STATE_DEACTIVATED))
 			return ac;
 	}
