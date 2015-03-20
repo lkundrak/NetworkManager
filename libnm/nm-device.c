@@ -470,6 +470,19 @@ set_property (GObject *object,
 		/* Construct only */
 		priv->device_type = g_value_get_enum (value);
 		break;
+	case PROP_MANAGED:
+		if (g_value_get_boolean (value)) {
+			if (priv->state == NM_DEVICE_STATE_UNMANAGED)
+				nm_device_state_changed (self,
+				                         NM_DEVICE_STATE_DISCONNECTED,
+				                         NM_DEVICE_STATE_REASON_USER_REQUESTED
+		} else {
+			if (priv->state != NM_DEVICE_STATE_UNMANAGED)
+				nm_device_state_changed (self,
+				                         NM_DEVICE_STATE_UNMANAGED,
+				                         NM_DEVICE_STATE_REASON_USER_REQUESTED
+		}
+		break;
 	case PROP_AUTOCONNECT:
 		b = g_value_get_boolean (value);
 		if (priv->autoconnect != b)
@@ -617,7 +630,7 @@ nm_device_class_init (NMDeviceClass *device_class)
 		(object_class, PROP_MANAGED,
 		 g_param_spec_boolean (NM_DEVICE_MANAGED, "", "",
 		                       FALSE,
-		                       G_PARAM_READABLE |
+		                       G_PARAM_READWRITE |
 		                       G_PARAM_STATIC_STRINGS));
 
 	/**

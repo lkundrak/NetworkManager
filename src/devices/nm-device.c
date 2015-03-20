@@ -5826,7 +5826,7 @@ _device_activate (NMDevice *self, NMActRequest *req)
 	delete_on_deactivate_unschedule (self);
 
 	/* Move default unmanaged devices to DISCONNECTED state here */
-	if (nm_device_get_default_unmanaged (self) && priv->state == NM_DEVICE_STATE_UNMANAGED) {
+	if (priv->state == NM_DEVICE_STATE_UNMANAGED) {
 		nm_device_state_changed (self,
 		                         NM_DEVICE_STATE_DISCONNECTED,
 		                         NM_DEVICE_STATE_REASON_NOW_MANAGED);
