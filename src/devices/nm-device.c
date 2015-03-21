@@ -6936,18 +6936,7 @@ nm_device_get_managed (NMDevice *self)
 
 	g_return_val_if_fail (NM_IS_DEVICE (self), FALSE);
 
-	priv = NM_DEVICE_GET_PRIVATE (self);
-
-	/* Return the composite of all managed flags.  However, if the device
-	 * is a default-unmanaged device, and would be managed except for the
-	 * default-unmanaged flag (eg, only NM_UNMANAGED_DEFAULT is set) then
-	 * the device is managed whenever it's not in the UNMANAGED state.
-	 */
-	managed = !(priv->unmanaged_flags & ~NM_UNMANAGED_DEFAULT);
-	if (managed && (priv->unmanaged_flags & NM_UNMANAGED_DEFAULT))
-		managed = (priv->state > NM_DEVICE_STATE_UNMANAGED);
-
-	return managed;
+	return NM_DEVICE_GET_PRIVATE (self)->state > NM_DEVICE_STATE_UNMANAGED;
 }
 
 /**
@@ -6960,18 +6949,6 @@ gboolean
 nm_device_get_unmanaged_flag (NMDevice *self, NMUnmanagedFlags flag)
 {
 	return NM_FLAGS_ANY (NM_DEVICE_GET_PRIVATE (self)->unmanaged_flags, flag);
-}
-
-/**
- * nm_device_get_default_unmanaged():
- * @self: the #NMDevice
- *
- * Returns: %TRUE if the device is by default unmanaged
- */
-static gboolean
-nm_device_get_default_unmanaged (NMDevice *self)
-{
-	return nm_device_get_unmanaged_flag (self, NM_UNMANAGED_DEFAULT);
 }
 
 void
@@ -7100,7 +7077,7 @@ nm_device_check_connection_available (NMDevice *self,
 	if (state < NM_DEVICE_STATE_UNMANAGED)
 		return FALSE;
 	if (   state < NM_DEVICE_STATE_UNAVAILABLE
-	    && nm_device_get_unmanaged_flag (self, NM_UNMANAGED_ALL & ~NM_UNMANAGED_DEFAULT))
+	    && nm_device_get_unmanaged_flag (self, NM_UNMANAGED_ALL))
 		return FALSE;
 	if (   state < NM_DEVICE_STATE_DISCONNECTED
 	    && (   (   !NM_FLAGS_HAS (flags, _NM_DEVICE_CHECK_CON_AVAILABLE_FOR_USER_REQUEST_WAITING_CARRIER)
