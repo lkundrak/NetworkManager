@@ -4424,6 +4424,9 @@ prop_filter (DBusConnection *connection,
 	} else if (!strcmp (propname, "Autoconnect")) {
 		glib_propname = NM_DEVICE_AUTOCONNECT;
 		permission = NM_AUTH_PERMISSION_NETWORK_CONTROL;
+	} else if (!strcmp (propname, "Managed")) {
+		glib_propname = NM_DEVICE_MANAGED;
+		permission = NM_AUTH_PERMISSION_NETWORK_CONTROL;
 	} else
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
