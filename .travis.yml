@@ -7,6 +7,4 @@ before_install:
   - sudo apt-add-repository 'deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse'
   - sudo apt-get update
   - sudo apt-get install libnl-3-dev libndp-dev automake
-  - sudo /etc/init.d/postgresql stop
-  - sudo env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
 script: "sh autogen.sh --with-systemd-logind=no --enable-more-warnings=no && make -j6 && make -k check"
