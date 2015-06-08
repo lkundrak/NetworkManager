@@ -1498,11 +1498,11 @@ read_vpn_secrets (KeyfileReaderInfo *info, NMSettingVpn *s_vpn)
 {
 	char **keys, **iter;
 
-	keys = nm_keyfile_plugin_kf_get_keys (info->keyfile, VPN_SECRETS_GROUP, NULL, NULL);
+	keys = nm_keyfile_plugin_kf_get_keys (info->keyfile, NM_KEYFILE_GROUP_VPN_SECRETS, NULL, NULL);
 	for (iter = keys; *iter; iter++) {
 		char *secret;
 
-		secret = nm_keyfile_plugin_kf_get_string (info->keyfile, VPN_SECRETS_GROUP, *iter, NULL);
+		secret = nm_keyfile_plugin_kf_get_string (info->keyfile, NM_KEYFILE_GROUP_VPN_SECRETS, *iter, NULL);
 		if (secret) {
 			nm_setting_vpn_add_secret (s_vpn, *iter, secret);
 			g_free (secret);
@@ -1578,7 +1578,7 @@ nm_keyfile_read (GKeyFile *keyfile,
 	groups = g_key_file_get_groups (keyfile, &length);
 	for (i = 0; i < length; i++) {
 		/* Only read out secrets when needed */
-		if (!strcmp (groups[i], VPN_SECRETS_GROUP)) {
+		if (!strcmp (groups[i], NM_KEYFILE_GROUP_VPN_SECRETS)) {
 			vpn_secrets = TRUE;
 			continue;
 		}
