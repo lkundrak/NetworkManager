@@ -1056,8 +1056,8 @@ nmtst_assert_connection_equals (NMConnection *a, gboolean normalize_a, NMConnect
 			gs_unref_keyfile GKeyFile *kf_a = NULL, *kf_b = NULL;
 			gs_free char *str_a = NULL, *str_b = NULL;
 
-			kf_a = nm_keyfile_write (a, NULL, NULL, NULL);
-			kf_b = nm_keyfile_write (b, NULL, NULL, NULL);
+			kf_a = nm_keyfile_write (a, NULL, NULL, NULL, NULL);
+			kf_b = nm_keyfile_write (b, NULL, NULL, NULL, NULL);
 
 			if (kf_a)
 				str_a = g_key_file_to_data (kf_a, NULL, NULL);
@@ -1263,7 +1263,7 @@ nmtst_create_connection_from_keyfile (const char *keyfile_str, const char *keyfi
 	g_assert_no_error (error);
 	g_assert (success);
 
-	con = nm_keyfile_read (keyfile, keyfile_name, base_dir, NULL, NULL, &error);
+	con = nm_keyfile_read (keyfile, keyfile_name, base_dir, NULL, NULL, NULL, &error);
 	g_assert_no_error (error);
 	g_assert (NM_IS_CONNECTION (con));
 

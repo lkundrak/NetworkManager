@@ -24,6 +24,7 @@
 #include <glib.h>
 
 #define NM_KEYFILE_GROUP_VPN_SECRETS "vpn-secrets"
+#define NM_KEYFILE_GROUP_META_DATA   ".meta-data"
 
 const char *nm_keyfile_plugin_get_alias_for_setting_name (const char *setting_name);
 

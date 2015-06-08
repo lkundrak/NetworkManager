@@ -720,8 +720,24 @@ write_setting_value (NMSetting *setting,
 		g_warn_if_reached ();
 }
 
+static void
+write_meta_data (GKeyFile *keyfile, GHashTable *meta_data)
+{
+	GHashTableIter iter;
+	const char *key, *value;
+
+	if (!meta_data || g_hash_table_size (meta_data) == 0)
+		return;
+	g_hash_table_iter_init (&iter, meta_data);
+	while (g_hash_table_iter_next (&iter, (gpointer *) &key, (gpointer *) &value)) {
+		if (key && *key && value)
+			g_key_file_set_string (keyfile, NM_KEYFILE_GROUP_META_DATA, key, value);
+	}
+}
+
 GKeyFile *
 nm_keyfile_write (NMConnection *connection,
+                  GHashTable *meta_data,
                   NMKeyfileWriteHandler handler,
                   void *user_data,
                   GError **error)
@@ -746,6 +762,9 @@ nm_keyfile_write (NMConnection *connection,
 		g_key_file_unref (info.keyfile);
 		return NULL;
 	}
+
+	write_meta_data (info.keyfile, meta_data);
+
 	return info.keyfile;
 }
 

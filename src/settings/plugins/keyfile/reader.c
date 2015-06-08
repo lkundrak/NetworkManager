@@ -120,7 +120,7 @@ nm_keyfile_plugin_connection_from_file (const char *filename, GError **error)
 	if (!g_key_file_load_from_file (key_file, filename, G_KEY_FILE_NONE, error))
 		goto out;
 
-	connection = nm_keyfile_read (key_file, filename, NULL, _handler_read, NULL, error);
+	connection = nm_keyfile_read (key_file, filename, NULL, _handler_read, NULL, NULL, error);
 	if (!connection)
 		goto out;
 

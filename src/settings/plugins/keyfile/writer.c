@@ -256,7 +256,7 @@ _internal_write_connection (NMConnection *connection,
 
 	info.keyfile_dir = keyfile_dir;
 
-	key_file = nm_keyfile_write (connection, _handler_write, &info, error);
+	key_file = nm_keyfile_write (connection, NULL, _handler_write, &info, error);
 	if (!key_file)
 		return FALSE;
 	data = g_key_file_to_data (key_file, &len, error);

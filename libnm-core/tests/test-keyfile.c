@@ -124,7 +124,7 @@ _nm_keyfile_write (NMConnection *connection,
 
 	g_assert (NM_IS_CONNECTION (connection));
 
-	kf = nm_keyfile_write (connection, handler, user_data, &error);
+	kf = nm_keyfile_write (connection, NULL, handler, user_data, &error);
 	g_assert_no_error (error);
 	g_assert (kf);
 	return kf;
@@ -143,7 +143,7 @@ _nm_keyfile_read (GKeyFile *keyfile,
 
 	g_assert (keyfile);
 
-	con = nm_keyfile_read (keyfile, keyfile_name, base_dir, read_handler, read_data, &error);
+	con = nm_keyfile_read (keyfile, keyfile_name, base_dir, read_handler, read_data, NULL, &error);
 	g_assert_no_error (error);
 	g_assert (NM_IS_CONNECTION (con));
 	if (needs_normalization)
@@ -553,6 +553,55 @@ test_8021x_cert_read (void)
 
 /******************************************************************************/
 
+static void
+test_meta_data ()
+{
+	GKeyFile *keyfile;
+	NMConnection *con;
+	GHashTable *meta_data;
+	GError *error = NULL;
+	char *value;
+
+	keyfile = _keyfile_load_from_data (
+	          "[connection]\n"
+	          "type=ethernet\n"
+	          "[.meta-data]\n"
+	          "key1=value1\n"
+	          "key2=value2\n"
+	          );
+	con = nm_keyfile_read (keyfile, "/test/meta-data/1", "somewhere/", NULL, NULL, &meta_data, &error);
+	g_assert (con);
+	g_assert_no_error (error);
+	g_assert (meta_data);
+	g_assert_cmpstr (g_hash_table_lookup (meta_data, "key1"), ==, "value1");
+	g_assert_cmpstr (g_hash_table_lookup (meta_data, "key2"), ==, "value2");
+	g_assert_cmpstr (g_hash_table_lookup (meta_data, "key3"), ==, NULL);
+	g_key_file_unref (keyfile);
+
+	nmtst_assert_connection_verifies_after_normalization (con, 0, 0);
+
+	keyfile = nm_keyfile_write (con, meta_data, NULL, NULL, &error);
+	g_assert_no_error (error);
+	g_assert (keyfile);
+
+	value = g_key_file_get_string (keyfile, NM_KEYFILE_GROUP_META_DATA, "key1", NULL);
+	g_assert_cmpstr (value, ==, "value1");
+	g_free (value);
+
+	value = g_key_file_get_string (keyfile, NM_KEYFILE_GROUP_META_DATA, "key2", NULL);
+	g_assert_cmpstr (value, ==, "value2");
+	g_free (value);
+
+	value = g_key_file_get_string (keyfile, NM_KEYFILE_GROUP_META_DATA, "key3", NULL);
+	g_assert (!value);
+
+	g_hash_table_unref (meta_data);
+	g_key_file_unref (keyfile);
+	g_object_unref (con);
+}
+
+/******************************************************************************/
+
 NMTST_DEFINE ();
 
 int main (int argc, char **argv)
@@ -561,6 +610,7 @@ int main (int argc, char **argv)
 
 	g_test_add_func ("/core/keyfile/test_8021x_cert", test_8021x_cert);
 	g_test_add_func ("/core/keyfile/test_8021x_cert_read", test_8021x_cert_read);
+	g_test_add_func ("/core/keyfile/test_meta_data", test_meta_data);
 
 	return g_test_run ();
 }

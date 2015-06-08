@@ -1511,6 +1511,34 @@ read_vpn_secrets (KeyfileReaderInfo *info, NMSettingVpn *s_vpn)
 	g_strfreev (keys);
 }
 
+static GHashTable *
+read_meta_data (GKeyFile *keyfile)
+{
+	char **keys;
+	GHashTable *meta_data;
+	guint k;
+
+	meta_data = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
+	keys = g_key_file_get_keys (keyfile, NM_KEYFILE_GROUP_META_DATA, NULL, NULL);
+	for (k = 0; keys && keys[k]; k++) {
+		char *value;
+
+		value = g_key_file_get_string (keyfile, NM_KEYFILE_GROUP_META_DATA, keys[k], NULL);
+		if (value)
+			g_hash_table_insert (meta_data, keys[k], value);
+		else
+			g_free (keys[k]);
+	}
+	g_free (keys);
+
+	if (g_hash_table_size (meta_data) == 0) {
+		g_hash_table_unref (meta_data);
+		return NULL;
+	}
+	return meta_data;
+}
+
 /**
  * nm_keyfile_read:
  * @keyfile: the keyfile from which to create the connection
@@ -1527,6 +1555,8 @@ read_vpn_secrets (KeyfileReaderInfo *info, NMSettingVpn *s_vpn)
  *   (if it is given as absolute path). As last, fallback to the current path.
  * @handler: read handler
  * @user_data: user data for read handler
+ * @out_meta_data: (transfer-full): (allow-none): returns a hash table with
+ *   meta data.
  * @error: error
  *
  * Tries to create a NMConnection from a keyfile. The resulting keyfile is
@@ -1540,6 +1570,7 @@ nm_keyfile_read (GKeyFile *keyfile,
                  const char *base_dir,
                  NMKeyfileReadHandler handler,
                  void *user_data,
+                 GHashTable **out_meta_data,
                  GError **error)
 {
 	NMConnection *connection = NULL;
@@ -1551,6 +1582,7 @@ nm_keyfile_read (GKeyFile *keyfile,
 	gboolean vpn_secrets = FALSE;
 	KeyfileReaderInfo info = { 0 };
 	gs_free char *base_dir_free = NULL;
+	gboolean has_meta_data = TRUE;
 
 	g_return_val_if_fail (keyfile, NULL);
 	g_return_val_if_fail (!error || !*error, NULL);
@@ -1580,6 +1612,10 @@ nm_keyfile_read (GKeyFile *keyfile,
 		/* Only read out secrets when needed */
 		if (!strcmp (groups[i], NM_KEYFILE_GROUP_VPN_SECRETS)) {
 			vpn_secrets = TRUE;
+			continue;
+		}
+		if (!strcmp (groups[i], NM_KEYFILE_GROUP_META_DATA)) {
+			has_meta_data = TRUE;
 			continue;
 		}
 
@@ -1648,8 +1684,12 @@ nm_keyfile_read (GKeyFile *keyfile,
 		}
 	}
 
+	if (out_meta_data)
+		*out_meta_data = has_meta_data ? read_meta_data (keyfile) : NULL;
 	return connection;
 out_error:
+	if (out_meta_data)
+		*out_meta_data = NULL;
 	g_propagate_error (error, info.error);
 	g_free (connection);
 	return NULL;
