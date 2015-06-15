@@ -138,6 +138,30 @@ ip6_addr_to_string (const struct in6_addr *addr, const char *iface)
 	return buf;
 }
 
+static void
+add_global_config (GString *str, const NMGlobalDnsConfig *config)
+{
+	GHashTableIter iter;
+	gpointer key, value;
+
+	g_hash_table_iter_init (&iter, config->domains);
+	while (g_hash_table_iter_next (&iter, &key, &value)) {
+		NMGlobalDnsDomainConfig *domain = value;
+		GSList *ns;
+
+		for (ns = domain->servers; ns; ns = g_slist_next (ns)) {
+			if (!strcmp ((char *) key, "*")) {
+				g_string_append_printf (str, "server=%s\n",
+				                        (char *) ns->data);
+			} else {
+				g_string_append_printf (str, "server=/%s/%s\n",
+				                        (char *) key,
+				                        (char *) ns->data);
+			}
+		}
+	}
+}
+
 static gboolean
 add_ip6_config (GString *str, NMIP6Config *ip6, gboolean split)
 {
@@ -204,6 +228,7 @@ update (NMDnsPlugin *plugin,
         const GSList *vpn_configs,
         const GSList *dev_configs,
         const GSList *other_configs,
+        const NMGlobalDnsConfig *global_config,
         const char *hostname)
 {
 	NMDnsDnsmasq *self = NM_DNS_DNSMASQ (plugin);
@@ -232,28 +257,32 @@ update (NMDnsPlugin *plugin,
 	/* Build up the new dnsmasq config file */
 	conf = g_string_sized_new (150);
 
-	/* Use split DNS for VPN configs */
-	for (iter = (GSList *) vpn_configs; iter; iter = g_slist_next (iter)) {
-		if (NM_IS_IP4_CONFIG (iter->data))
-			add_ip4_config (conf, NM_IP4_CONFIG (iter->data), TRUE);
-		else if (NM_IS_IP6_CONFIG (iter->data))
-			add_ip6_config (conf, NM_IP6_CONFIG (iter->data), TRUE);
-	}
+	if (global_config)
+		add_global_config (conf, global_config);
+	else {
+		/* Use split DNS for VPN configs */
+		for (iter = (GSList *) vpn_configs; iter; iter = g_slist_next (iter)) {
+			if (NM_IS_IP4_CONFIG (iter->data))
+				add_ip4_config (conf, NM_IP4_CONFIG (iter->data), TRUE);
+			else if (NM_IS_IP6_CONFIG (iter->data))
+				add_ip6_config (conf, NM_IP6_CONFIG (iter->data), TRUE);
+		}
 
-	/* Now add interface configs without split DNS */
-	for (iter = (GSList *) dev_configs; iter; iter = g_slist_next (iter)) {
-		if (NM_IS_IP4_CONFIG (iter->data))
-			add_ip4_config (conf, NM_IP4_CONFIG (iter->data), FALSE);
-		else if (NM_IS_IP6_CONFIG (iter->data))
-			add_ip6_config (conf, NM_IP6_CONFIG (iter->data), FALSE);
-	}
+		/* Now add interface configs without split DNS */
+		for (iter = (GSList *) dev_configs; iter; iter = g_slist_next (iter)) {
+			if (NM_IS_IP4_CONFIG (iter->data))
+				add_ip4_config (conf, NM_IP4_CONFIG (iter->data), FALSE);
+			else if (NM_IS_IP6_CONFIG (iter->data))
+				add_ip6_config (conf, NM_IP6_CONFIG (iter->data), FALSE);
+		}
 
-	/* And any other random configs */
-	for (iter = (GSList *) other_configs; iter; iter = g_slist_next (iter)) {
-		if (NM_IS_IP4_CONFIG (iter->data))
-			add_ip4_config (conf, NM_IP4_CONFIG (iter->data), FALSE);
-		else if (NM_IS_IP6_CONFIG (iter->data))
-			add_ip6_config (conf, NM_IP6_CONFIG (iter->data), FALSE);
+		/* And any other random configs */
+		for (iter = (GSList *) other_configs; iter; iter = g_slist_next (iter)) {
+			if (NM_IS_IP4_CONFIG (iter->data))
+				add_ip4_config (conf, NM_IP4_CONFIG (iter->data), FALSE);
+			else if (NM_IS_IP6_CONFIG (iter->data))
+				add_ip6_config (conf, NM_IP6_CONFIG (iter->data), FALSE);
+		}
 	}
 
 	/* Write out the config file */
