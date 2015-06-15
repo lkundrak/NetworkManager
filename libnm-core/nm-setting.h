@@ -289,6 +289,9 @@ NM_AVAILABLE_IN_1_2
 const char  **nm_setting_property_get_valid_values (NMSetting *setting,
                                                     const char *property_name);
 NM_AVAILABLE_IN_1_2
+gboolean nm_setting_property_has_metadata          (NMSetting *setting,
+                                                    const char *property_name);
+NM_AVAILABLE_IN_1_2
 gboolean      nm_setting_property_is_filename      (NMSetting *setting,
                                                     const char *property_name);
 NM_AVAILABLE_IN_1_2
