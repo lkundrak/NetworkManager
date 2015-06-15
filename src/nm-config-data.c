@@ -72,6 +72,8 @@ typedef struct {
 
 	char *dns_mode;
 	char *rc_manager;
+
+	NMGlobalDnsConfig *global_dns_config;
 } NMConfigDataPrivate;
 
 
@@ -514,6 +516,187 @@ nm_config_data_log (const NMConfigData *self, const char *prefix)
 
 /************************************************************************/
 
+static void
+free_global_dns_domain (gpointer data)
+{
+	NMGlobalDnsDomainConfig *domain = data;
+
+	g_return_if_fail (domain);
+
+	g_slist_free_full (domain->servers, g_free);
+	g_slist_free_full (domain->options, g_free);
+	g_free (domain);
+}
+
+static void
+free_global_dns_config (NMGlobalDnsConfig *conf)
+{
+	if (conf) {
+		g_slist_free_full (conf->searches, g_free);
+		g_slist_free_full (conf->options, g_free);
+		g_hash_table_destroy (conf->domains);
+		g_free (conf);
+	}
+}
+
+NMGlobalDnsConfig *
+nm_config_data_get_global_dns_config (const NMConfigData *self)
+{
+	g_return_val_if_fail (NM_IS_CONFIG_DATA (self), NULL);
+
+	return NM_CONFIG_DATA_GET_PRIVATE (self)->global_dns_config;
+}
+
+void
+nm_config_data_set_global_dns_config (const NMConfigData *self, NMGlobalDnsConfig *conf)
+{
+	NMConfigDataPrivate *priv;
+
+	g_return_if_fail (NM_IS_CONFIG_DATA (self));
+
+	priv = NM_CONFIG_DATA_GET_PRIVATE (self);
+	free_global_dns_config (priv->global_dns_config);
+	priv->global_dns_config = conf;
+}
+
+static GSList *
+strv_to_slist (char **strv)
+{
+	int i;
+	GSList *list = NULL;
+
+	if (strv) {
+		for (i = 0; strv[i]; i++)
+			list = g_slist_prepend (list, g_strdup (strv[i]));
+	}
+
+	return g_slist_reverse (list);
+}
+
+static NMGlobalDnsConfig *
+load_global_dns_config (GKeyFile *keyfile)
+{
+	NMGlobalDnsConfig *conf;
+	char *value;
+	char **tokens, **groups;
+	int g;
+
+	g_return_val_if_fail (keyfile, NULL);
+
+	if (!g_key_file_has_group (keyfile, NM_CONFIG_DATA_GLOBAL_DNS_GROUP))
+		return NULL;
+
+	conf = g_malloc0 (sizeof (NMGlobalDnsConfig));
+	conf->domains = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, free_global_dns_domain);
+
+	value = g_key_file_get_value (keyfile, NM_CONFIG_DATA_GLOBAL_DNS_GROUP, "searches", NULL);
+	if (value) {
+		tokens = g_strsplit (value, ",", 0);
+		conf->searches = strv_to_slist (tokens);
+		g_strfreev (tokens);
+		g_free (value);
+	}
+
+	value = g_key_file_get_value (keyfile, NM_CONFIG_DATA_GLOBAL_DNS_GROUP, "options", NULL);
+	if (value) {
+		tokens = g_strsplit (value, ",", 0);
+		conf->options = strv_to_slist (tokens);
+		g_strfreev (tokens);
+		g_free (value);
+	}
+
+	groups = g_key_file_get_groups (keyfile, NULL);
+	for (g = 0; groups[g]; g++) {
+		char *name;
+		GSList *servers = NULL, *options = NULL;
+		NMGlobalDnsDomainConfig *domain;
+
+		if (!g_str_has_prefix (groups[g], NM_CONFIG_DATA_GLOBAL_DNS_DOMAIN_PREFIX))
+			continue;
+		name = g_key_file_get_value (keyfile, groups[g], "domain", NULL);
+		if (!name)
+			continue;
+
+		/* Skip duplicated domains */
+		if (g_hash_table_contains (conf->domains, name)) {
+			g_free (name);
+			continue;
+		}
+
+		value = g_key_file_get_value (keyfile, groups[g], "servers", NULL);
+		if (value) {
+			tokens = g_strsplit (value, ",", 0);
+			servers = strv_to_slist (tokens);
+			g_strfreev (tokens);
+			g_free (value);
+		}
+
+		value = g_key_file_get_value (keyfile, groups[g], "options", NULL);
+		if (value) {
+			tokens = g_strsplit (value, ",", 0);
+			options = strv_to_slist (tokens);
+			g_strfreev (tokens);
+			g_free (value);
+		}
+
+		if (servers || options) {
+			domain = g_malloc0 (sizeof (NMGlobalDnsDomainConfig));
+			domain->servers = servers;
+			domain->options = options;
+			g_hash_table_insert (conf->domains, name, domain);
+		} else
+			g_free (name);
+	}
+
+	return conf;
+}
+
+static gboolean
+global_dns_config_equals (NMGlobalDnsConfig *old, NMGlobalDnsConfig *new)
+{
+	NMGlobalDnsDomainConfig *domain_old, *domain_new;
+	gpointer key, value_old, value_new;
+	GHashTableIter iter;
+
+	if (old == new)
+		return TRUE;
+
+	if (!old || !new)
+		return FALSE;
+
+	if (!_slist_str_equals (old->options, new->options))
+		return FALSE;
+
+	if (!_slist_str_equals (old->searches, new->searches))
+		return FALSE;
+
+	if ((!old->domains || !new->domains) && old->domains != new->domains)
+		return FALSE;
+
+	if (g_hash_table_size (old->domains) != g_hash_table_size (new->domains))
+		return FALSE;
+
+	g_hash_table_iter_init (&iter, old->domains);
+	while (g_hash_table_iter_next (&iter, &key, &value_old)) {
+		value_new = g_hash_table_lookup (new->domains, key);
+		if (!value_new)
+			return FALSE;
+
+		domain_old = value_old;
+		domain_new = value_new;
+
+		if (!_slist_str_equals (domain_old->options, domain_new->options))
+			return FALSE;
+
+		if (!_slist_str_equals (domain_old->servers, domain_new->servers))
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
+/************************************************************************/
+
 char *
 nm_config_data_get_connection_default (const NMConfigData *self,
                                        const char *property,
@@ -648,6 +831,9 @@ nm_config_data_diff (NMConfigData *old_data, NMConfigData *new_data)
 	if (g_strcmp0 (nm_config_data_get_rc_manager (old_data), nm_config_data_get_rc_manager (new_data)))
 		changes |= NM_CONFIG_CHANGE_RC_MANAGER;
 
+	if (!global_dns_config_equals (priv_old->global_dns_config, priv_new->global_dns_config))
+		changes |= NM_CONFIG_CHANGE_GLOBAL_DNS_CONFIG;
+
 	return changes;
 }
 
@@ -769,6 +955,8 @@ finalize (GObject *gobject)
 	g_slist_free_full (priv->ignore_carrier, g_free);
 	g_slist_free_full (priv->assume_ipv6ll_only, g_free);
 
+	free_global_dns_config (priv->global_dns_config);
+
 	if (priv->connection_infos) {
 		for (i = 0; priv->connection_infos[i].group_name; i++) {
 			g_free (priv->connection_infos[i].group_name);
@@ -820,6 +1008,7 @@ constructed (GObject *object)
 	priv->assume_ipv6ll_only = nm_config_get_device_match_spec (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "assume-ipv6ll-only", NULL);
 
 	priv->no_auto_default.specs_config = nm_config_get_device_match_spec (priv->keyfile, NM_CONFIG_KEYFILE_GROUP_MAIN, "no-auto-default", NULL);
+	priv->global_dns_config = load_global_dns_config (priv->keyfile);
 
 	G_OBJECT_CLASS (nm_config_data_parent_class)->constructed (object);
 }

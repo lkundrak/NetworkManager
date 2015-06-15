@@ -45,6 +45,8 @@ G_BEGIN_DECLS
 #define NM_CONFIG_DATA_CONNECTIVITY_RESPONSE "connectivity-response"
 #define NM_CONFIG_DATA_NO_AUTO_DEFAULT       "no-auto-default"
 #define NM_CONFIG_DATA_DNS_MODE              "dns"
+#define NM_CONFIG_DATA_GLOBAL_DNS_GROUP      "global-dns"
+#define NM_CONFIG_DATA_GLOBAL_DNS_DOMAIN_PREFIX  "global-dns-domain-"
 
 typedef enum { /*<flags >*/
 	NM_CONFIG_GET_VALUE_NONE                   = 0,
@@ -73,6 +75,7 @@ typedef enum { /*< flags >*/
 	NM_CONFIG_CHANGE_NO_AUTO_DEFAULT           = (1L << 5),
 	NM_CONFIG_CHANGE_DNS_MODE                  = (1L << 6),
 	NM_CONFIG_CHANGE_RC_MANAGER                = (1L << 7),
+	NM_CONFIG_CHANGE_GLOBAL_DNS_CONFIG         = (1L << 8),
 
 	_NM_CONFIG_CHANGE_LAST,
 	NM_CONFIG_CHANGE_ALL                       = ((_NM_CONFIG_CHANGE_LAST - 1) << 1) - 1,
@@ -85,6 +88,17 @@ struct _NMConfigData {
 typedef struct {
 	GObjectClass parent;
 } NMConfigDataClass;
+
+typedef struct {
+	GSList *servers;
+	GSList *options;
+} NMGlobalDnsDomainConfig;
+
+typedef struct {
+	GSList *searches;
+	GSList *options;
+	GHashTable *domains;
+} NMGlobalDnsConfig;
 
 GType nm_config_data_get_type (void);
 
@@ -120,6 +134,8 @@ const char *nm_config_data_get_rc_manager (const NMConfigData *self);
 
 gboolean nm_config_data_get_ignore_carrier (const NMConfigData *self, NMDevice *device);
 gboolean nm_config_data_get_assume_ipv6ll_only (const NMConfigData *self, NMDevice *device);
+NMGlobalDnsConfig *nm_config_data_get_global_dns_config (const NMConfigData *self);
+void nm_config_data_set_global_dns_config (const NMConfigData *self, NMGlobalDnsConfig *conf);
 
 char *nm_config_data_get_connection_default (const NMConfigData *self,
                                              const char *property,
