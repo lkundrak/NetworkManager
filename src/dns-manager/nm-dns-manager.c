@@ -667,15 +667,38 @@ update_resolv_conf (NMDnsManager *self,
 }
 
 static void
-compute_hash (NMDnsManager *self, guint8 buffer[HASH_LEN])
+compute_hash (NMDnsManager *self, const NMConfigGlobalDns *global, guint8 buffer[HASH_LEN])
 {
 	NMDnsManagerPrivate *priv = NM_DNS_MANAGER_GET_PRIVATE (self);
 	GChecksum *sum;
 	GSList *iter;
 	gsize len = HASH_LEN;
+	GList *keys, *key;
 
 	sum = g_checksum_new (G_CHECKSUM_SHA1);
 	g_assert (len == g_checksum_type_get_length (G_CHECKSUM_SHA1));
+
+	if (global) {
+		for (iter = global->searches; iter; iter = g_slist_next (iter))
+			g_checksum_update (sum, (guchar *) iter->data, strlen ((char *) iter->data));
+		for (iter = global->options; iter; iter = g_slist_next (iter))
+			g_checksum_update (sum, (guchar *) iter->data, strlen ((char *) iter->data));
+
+		keys = g_list_sort (g_hash_table_get_keys (global->domains), (GCompareFunc) strcmp);
+		for (key = keys; key; key = g_list_next (key)) {
+			NMConfigGlobalDnsDomain *domain;
+
+			domain = g_hash_table_lookup (global->domains, key->data);
+			g_assert_nonnull (domain);
+			g_checksum_update (sum, (guchar *) key->data, strlen (key->data));
+
+			for (iter = domain->servers; iter; iter = g_slist_next (iter))
+				g_checksum_update (sum, (guchar *) iter->data, strlen ((char *) iter->data));
+			for (iter = domain->options; iter; iter = g_slist_next (iter))
+				g_checksum_update (sum, (guchar *) iter->data, strlen ((char *) iter->data));
+		}
+		g_list_free (keys);
+	}
 
 	if (priv->ip4_vpn_config)
 		nm_ip4_config_hash (priv->ip4_vpn_config, sum, TRUE);
@@ -742,6 +765,31 @@ build_plugin_config_lists (NMDnsManager *self,
 }
 
 static gboolean
+merge_global_dns_config (NMResolvConfData *rc, const NMConfigGlobalDns *global_conf)
+{
+	NMConfigGlobalDnsDomain *default_domain;
+	GSList *iter;
+
+	if (!global_conf)
+		return FALSE;
+
+	for (iter = global_conf->searches; iter; iter = g_slist_next (iter)) {
+		if (DOMAIN_IS_VALID ((char *) iter->data))
+			add_string_item (rc->searches, iter->data);
+	}
+
+	for (iter = global_conf->options; iter; iter = g_slist_next (iter))
+		add_string_item (rc->options, iter->data);
+
+	default_domain = g_hash_table_lookup (global_conf->domains, "*");
+	g_assert (default_domain);
+	for (iter = default_domain->servers; iter; iter = g_slist_next (iter))
+		add_string_item (rc->nameservers, iter->data);
+
+	return TRUE;
+}
+
+static gboolean
 update_dns (NMDnsManager *self,
             gboolean no_caching,
             GError **error)
@@ -758,6 +806,8 @@ update_dns (NMDnsManager *self,
 	gboolean caching = FALSE, update = TRUE;
 	gboolean resolv_conf_updated = FALSE;
 	SpawnResult result = SR_ERROR;
+	NMConfigData *data;
+	const NMConfigGlobalDns *global_config;
 
 	g_return_val_if_fail (!error || !*error, FALSE);
 
@@ -771,8 +821,11 @@ update_dns (NMDnsManager *self,
 		_LOGD ("update-dns: updating resolv.conf");
 	}
 
+	data = nm_config_get_data (priv->config);
+	global_config = nm_config_data_get_global_dns (data);
+
 	/* Update hash with config we're applying */
-	compute_hash (self, priv->hash);
+	compute_hash (self, global_config, priv->hash);
 
 	rc.nameservers = g_ptr_array_new ();
 	rc.searches = g_ptr_array_new ();
@@ -780,33 +833,37 @@ update_dns (NMDnsManager *self,
 	rc.nis_domain = NULL;
 	rc.nis_servers = g_ptr_array_new ();
 
-	if (priv->ip4_vpn_config)
-		merge_one_ip4_config (&rc, priv->ip4_vpn_config);
-	if (priv->ip4_device_config)
-		merge_one_ip4_config (&rc, priv->ip4_device_config);
+	if (global_config)
+		merge_global_dns_config (&rc, global_config);
+	else {
+		if (priv->ip4_vpn_config)
+			merge_one_ip4_config (&rc, priv->ip4_vpn_config);
+		if (priv->ip4_device_config)
+			merge_one_ip4_config (&rc, priv->ip4_device_config);
 
-	if (priv->ip6_vpn_config)
-		merge_one_ip6_config (&rc, priv->ip6_vpn_config);
-	if (priv->ip6_device_config)
-		merge_one_ip6_config (&rc, priv->ip6_device_config);
+		if (priv->ip6_vpn_config)
+			merge_one_ip6_config (&rc, priv->ip6_vpn_config);
+		if (priv->ip6_device_config)
+			merge_one_ip6_config (&rc, priv->ip6_device_config);
 
-	for (iter = priv->configs; iter; iter = g_slist_next (iter)) {
-		if (   (iter->data == priv->ip4_vpn_config)
-		    || (iter->data == priv->ip4_device_config)
-		    || (iter->data == priv->ip6_vpn_config)
-		    || (iter->data == priv->ip6_device_config))
-			continue;
+		for (iter = priv->configs; iter; iter = g_slist_next (iter)) {
+			if (   (iter->data == priv->ip4_vpn_config)
+				|| (iter->data == priv->ip4_device_config)
+				|| (iter->data == priv->ip6_vpn_config)
+				|| (iter->data == priv->ip6_device_config))
+				continue;
 
-		if (NM_IS_IP4_CONFIG (iter->data)) {
-			NMIP4Config *config = NM_IP4_CONFIG (iter->data);
+			if (NM_IS_IP4_CONFIG (iter->data)) {
+				NMIP4Config *config = NM_IP4_CONFIG (iter->data);
 
-			merge_one_ip4_config (&rc, config);
-		} else if (NM_IS_IP6_CONFIG (iter->data)) {
-			NMIP6Config *config = NM_IP6_CONFIG (iter->data);
+				merge_one_ip4_config (&rc, config);
+			} else if (NM_IS_IP6_CONFIG (iter->data)) {
+				NMIP6Config *config = NM_IP6_CONFIG (iter->data);
 
-			merge_one_ip6_config (&rc, config);
-		} else
-			g_assert_not_reached ();
+				merge_one_ip6_config (&rc, config);
+			} else
+				g_assert_not_reached ();
+		}
 	}
 
 	/* If the hostname is a FQDN ("dcbw.example.com"), then add the domain part of it
@@ -879,13 +936,15 @@ update_dns (NMDnsManager *self,
 			caching = TRUE;
 		}
 
-		build_plugin_config_lists (self, &vpn_configs, &dev_configs, &other_configs);
+		if (!global_config)
+			build_plugin_config_lists (self, &vpn_configs, &dev_configs, &other_configs);
 
 		_LOGD ("update-dns: updating plugin %s", plugin_name);
 		if (!nm_dns_plugin_update (plugin,
 		                           vpn_configs,
 		                           dev_configs,
 		                           other_configs,
+		                           global_config,
 		                           priv->hostname)) {
 			_LOGW ("update-dns: plugin %s update failed", plugin_name);
 
@@ -1212,7 +1271,7 @@ nm_dns_manager_end_updates (NMDnsManager *self, const char *func)
 	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
 	g_return_if_fail (priv->updates_queue > 0);
 
-	compute_hash (self, new);
+	compute_hash (self, nm_config_data_get_global_dns (nm_config_get_data (priv->config)), new);
 	changed = (memcmp (new, priv->prev_hash, sizeof (new)) != 0) ? TRUE : FALSE;
 	_LOGD ("(%s): DNS configuration %s", func, changed ? "changed" : "did not change");
 
@@ -1346,7 +1405,8 @@ config_changed_cb (NMConfig *config,
 	if (NM_FLAGS_ANY (changes, NM_CONFIG_CHANGE_SIGHUP |
 	                           NM_CONFIG_CHANGE_SIGUSR1 |
 	                           NM_CONFIG_CHANGE_DNS_MODE |
-	                           NM_CONFIG_CHANGE_RC_MANAGER)) {
+	                           NM_CONFIG_CHANGE_RC_MANAGER |
+	                           NM_CONFIG_CHANGE_GLOBAL_DNS_CONFIG)) {
 		if (!update_dns (self, TRUE, &error)) {
 			_LOGW ("could not commit DNS changes: %s", error->message);
 			g_clear_error (&error);
@@ -1361,10 +1421,11 @@ nm_dns_manager_init (NMDnsManager *self)
 
 	_LOGt ("creating...");
 
-	/* Set the initial hash */
-	compute_hash (self, NM_DNS_MANAGER_GET_PRIVATE (self)->hash);
-
 	priv->config = g_object_ref (nm_config_get ());
+	/* Set the initial hash */
+	compute_hash (self, nm_config_data_get_global_dns (nm_config_get_data (priv->config)),
+	              NM_DNS_MANAGER_GET_PRIVATE (self)->hash);
+
 	g_signal_connect (G_OBJECT (priv->config),
 	                  NM_CONFIG_SIGNAL_CONFIG_CHANGED,
 	                  G_CALLBACK (config_changed_cb),
