@@ -91,6 +91,11 @@ G_STMT_START { \
 	g_return_if_fail_warning (G_LOG_DOMAIN, G_STRFUNC, text); \
 } G_STMT_END
 
+#define log_assert_failed_unreachable(text, file, line, func) \
+G_STMT_START { \
+	log_internal (LOG_CRIT, 0, file, line, func, "Code should not be reached '%s' at %s:%u, function %s(). Aborting.", text, file, line, func); \
+	g_assert_not_reached (); \
+} G_STMT_END
 
 /*****************************************************************************/
 
@@ -121,6 +126,10 @@ G_STMT_START { \
 
 static inline pid_t gettid(void) {
         return (pid_t) syscall(SYS_gettid);
+}
+
+static inline bool is_main_thread(void) {
+        return TRUE;
 }
 
 #endif /* NM_SD_ADAPT_H */

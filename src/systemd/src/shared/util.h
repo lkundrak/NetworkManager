@@ -598,7 +598,9 @@ int get_files_in_directory(const char *path, char ***list);
 
 char *strjoin(const char *x, ...) _sentinel_;
 
+#if 0
 bool is_main_thread(void);
+#endif
 
 static inline bool _pure_ in_charset(const char *s, const char* charset) {
         assert(s);

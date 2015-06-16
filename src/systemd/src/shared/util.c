@@ -108,6 +108,7 @@ char **saved_argv = NULL;
 
 static volatile unsigned cached_columns = 0;
 static volatile unsigned cached_lines = 0;
+#endif /* NM_IGNORED */
 
 size_t page_size(void) {
         static thread_local size_t pgsz = 0;
@@ -122,7 +123,6 @@ size_t page_size(void) {
         pgsz = (size_t) r;
         return pgsz;
 }
-#endif /* NM_IGNORED */
 
 bool streq_ptr(const char *a, const char *b) {
 

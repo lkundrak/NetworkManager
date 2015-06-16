@@ -85,6 +85,17 @@ libsystemd_nm_la_SOURCES = \
 	systemd/src/libsystemd-network/sd-ipv4ll.c \
 	systemd/src/libsystemd-network/ipv4ll-packet.c \
 	systemd/src/libsystemd-network/ipv4ll-network.c \
+	systemd/src/libsystemd-network/lldp.h \
+	systemd/src/libsystemd-network/lldp-tlv.h \
+	systemd/src/libsystemd-network/lldp-tlv.c \
+	systemd/src/libsystemd-network/lldp-network.h \
+	systemd/src/libsystemd-network/lldp-network.c \
+	systemd/src/libsystemd-network/lldp-port.h \
+	systemd/src/libsystemd-network/lldp-port.c \
+	systemd/src/libsystemd-network/lldp-internal.h \
+	systemd/src/libsystemd-network/lldp-internal.c \
+	systemd/src/libsystemd-network/lldp-util.h \
+	systemd/src/libsystemd-network/sd-lldp.c \
 	systemd/src/shared/async.h \
 	systemd/src/shared/time-util.h \
 	systemd/src/shared/siphash24.h \
@@ -109,6 +120,12 @@ libsystemd_nm_la_SOURCES = \
 	systemd/src/shared/unaligned.h \
 	systemd/src/shared/utf8.h \
 	systemd/src/shared/utf8.c \
+	systemd/src/shared/hashmap.h \
+	systemd/src/shared/hashmap.c \
+	systemd/src/shared/prioq.h \
+	systemd/src/shared/prioq.c \
+	systemd/src/shared/mempool.h \
+	systemd/src/shared/mempool.c \
 	systemd/src/systemd/sd-dhcp-lease.h \
 	systemd/src/systemd/sd-dhcp-client.h \
 	systemd/src/systemd/sd-id128.h \
@@ -117,6 +134,7 @@ libsystemd_nm_la_SOURCES = \
 	systemd/src/systemd/sd-event.h \
 	systemd/src/systemd/_sd-common.h \
 	systemd/src/systemd/sd-ipv4ll.h \
+	systemd/src/systemd/sd-lldp.h \
 	systemd/nm-sd-adapt.h \
 	systemd/nm-sd-adapt.c
 
