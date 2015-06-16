@@ -52,6 +52,7 @@
 #include "nm-connection-provider.h"
 #include "nm-device-factory.h"
 #include "nm-core-internal.h"
+#include "sd-lldp.h"
 
 #include "nm-device-ethernet-glue.h"
 
@@ -98,6 +99,7 @@ typedef enum {
 
 typedef struct {
 	guint32             speed;
+	sd_lldp             *lldp;
 
 	Supplicant          supplicant;
 	guint               supplicant_timeout_id;
@@ -1182,6 +1184,61 @@ dcb_carrier_changed (NMDevice *device, GParamSpec *pspec, gpointer unused)
 
 /****************************************************************/
 
+static void
+lldp_handler (sd_lldp *lldp, int event, void *userdata)
+{
+	nm_log_dbg (LOGD_ETHER, "LLDP handler: event %d", event);
+}
+
+static gboolean
+start_lldp (NMDeviceEthernet *self)
+{
+	NMDeviceEthernetPrivate *priv = NM_DEVICE_ETHERNET_GET_PRIVATE (self);
+	int ret, ifindex;
+	const struct ether_addr *addr;
+	size_t addr_len;
+
+	ifindex = nm_device_get_ifindex (self);
+	addr = nm_platform_link_get_address (NM_PLATFORM_GET, ifindex, &addr_len);
+	if (!addr || addr_len != ETH_ALEN) {
+		_LOGE (LOGD_ETHER, "LLDP: can't retrieve hardware address");
+		return FALSE;
+	}
+
+	ret = sd_lldp_new (ifindex,
+                       nm_device_get_iface (self),
+                       addr,
+                       &priv->lldp);
+	if (ret) {
+		_LOGW (LOGD_ETHER, "LLDP: initialization failed");
+		return FALSE;
+	}
+
+	ret = sd_lldp_attach_event (priv->lldp, NULL, 0);
+	if (ret) {
+		_LOGW (LOGD_ETHER, "LLDP: attach event failed");
+		sd_lldp_free (priv->lldp);
+		return FALSE;
+	}
+
+	ret = sd_lldp_set_callback (priv->lldp, lldp_handler, priv);
+	if (ret) {
+		_LOGW (LOGD_ETHER, "LLDP: set callback failed");
+		sd_lldp_free (priv->lldp);
+		return FALSE;
+	}
+
+	ret = sd_lldp_start (priv->lldp);
+	if (ret) {
+		_LOGW (LOGD_ETHER, "LLDP: start failed");
+		sd_lldp_free (priv->lldp);
+		return FALSE;
+	}
+
+	_LOGD (LOGD_ETHER, "LLDP initialized");
+	return TRUE;
+}
+
 static NMActStageReturn
 act_stage2_config (NMDevice *device, NMDeviceStateReason *reason)
 {
@@ -1261,6 +1318,8 @@ act_stage2_config (NMDevice *device, NMDeviceStateReason *reason)
 		}
 	}
 
+	start_lldp (self);
+
 	return ret;
 }
 
@@ -1330,6 +1389,11 @@ deactivate (NMDevice *device)
 	if (priv->ppp_manager) {
 		g_object_unref (priv->ppp_manager);
 		priv->ppp_manager = NULL;
+	}
+
+	if (priv->lldp) {
+		sd_lldp_free (priv->lldp);
+		priv->lldp = NULL;
 	}
 
 	supplicant_interface_release (self);
