@@ -33,6 +33,7 @@
 #include "gsystem-local-alloc.h"
 #include "nm-enum-types.h"
 #include "nm-core-internal.h"
+#include "nm-macros-internal.h"
 #include "nm-keyfile-internal.h"
 
 #include <gio/gio.h>
@@ -172,6 +173,34 @@ nm_config_keyfile_get_boolean (GKeyFile *keyfile,
 
 	str = g_key_file_get_value (keyfile, section, key, NULL);
 	return nm_config_parse_boolean (str, default_value);
+}
+
+char *
+nm_config_keyfile_get_value (GKeyFile *keyfile,
+                             const char *section,
+                             const char *key,
+                             NMConfigGetValueFlags flags)
+{
+	char *value;
+
+	if (NM_FLAGS_HAS (flags, NM_CONFIG_GET_VALUE_RAW))
+		value = g_key_file_get_value (keyfile, section, key, NULL);
+	else
+		value = g_key_file_get_string (keyfile, section, key, NULL);
+
+	if (!value)
+		return NULL;
+
+	if (NM_FLAGS_HAS (flags, NM_CONFIG_GET_VALUE_STRIP))
+		g_strstrip (value);
+
+	if (NM_FLAGS_HAS (flags, NM_CONFIG_GET_VALUE_NO_EMPTY)
+	    && !*value) {
+		g_free (value);
+		return NULL;
+	}
+
+	return value;
 }
 
 void

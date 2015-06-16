@@ -40,7 +40,7 @@ _assert_config_value (const NMConfigData *config_data, const char *group, const 
 {
 	gs_free char *value = NULL;
 
-	value = nm_config_data_get_value (config_data, group, key);
+	value = nm_config_data_get_value (config_data, group, key, NM_CONFIG_GET_VALUE_NONE);
 	if (g_strcmp0 (value, expected_value)) {
 		g_error ("(%s:%d) invalid value in config-data %s.%s = %s%s%s (instead of %s%s%s)",
 		         file, line, group, key,
@@ -142,21 +142,21 @@ test_config_simple (void)
 	g_assert_cmpstr (plugins[1], ==, "bar");
 	g_assert_cmpstr (plugins[2], ==, "baz");
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "extra-section", "extra-key");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "extra-section", "extra-key", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "some value");
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "extra-section", "no-key");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "extra-section", "no-key", NM_CONFIG_GET_VALUE_NONE);
 	g_assert (!value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "no-section", "no-key");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "no-section", "no-key", NM_CONFIG_GET_VALUE_NONE);
 	g_assert (!value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "connection", "ipv6.ip6_privacy");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "connection", "ipv6.ip6_privacy", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "0");
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "connection.dev51", "ipv4.route-metric");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "connection.dev51", "ipv4.route-metric", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "51");
 	g_free (value);
 
@@ -333,41 +333,41 @@ test_config_confdir (void)
 	g_assert_cmpstr (plugins[3], ==, "one");
 	g_assert_cmpstr (plugins[4], ==, "two");
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "main", "extra");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "main", "extra", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "hello");
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "main", "new");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "main", "new", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "something"); /* not ",something" */
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "order", "a");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "order", "a", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "90");
 	g_free (value);
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "order", "b");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "order", "b", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "10");
 	g_free (value);
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "order", "c");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "order", "c", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "0");
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val1");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val1", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "a,c");
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val2");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val2", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "VAL2");
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val3");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val3", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, NULL);
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val4");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val4", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "vb,vb");
 	g_free (value);
 
-	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val5");
+	value = nm_config_data_get_value (nm_config_get_data_orig (config), "append", "val5", NM_CONFIG_GET_VALUE_NONE);
 	g_assert_cmpstr (value, ==, "VAL5");
 	g_free (value);
 
