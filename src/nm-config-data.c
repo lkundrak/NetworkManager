@@ -860,7 +860,6 @@ nm_config_data_update_global_dns_config (const NMConfigData *self,
 		}
 	}
 
-	nm_config_data_set_global_dns_config (self, config);
 	return global_dns_config_update_keyfile (self, config);
 }
 
