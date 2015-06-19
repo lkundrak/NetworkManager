@@ -573,6 +573,26 @@ strv_to_slist (char **strv)
 	return g_slist_reverse (list);
 }
 
+static char **
+slist_to_strv (GSList *slist)
+{
+	GSList *iter;
+	char **strv;
+	int len, i;
+
+	len = g_slist_length (slist);
+	strv = g_new (char *, len + 1);
+
+	for (i = 0, iter = slist; iter; iter = iter->next, i++)
+		strv[i] = g_strdup (iter->data);
+	strv[i] = NULL;
+
+	return strv;
+}
+
+#define GLOB_DNS_INTERN_GROUP       NM_CONFIG_KEYFILE_GROUPPREFIX_INTERN NM_CONFIG_DATA_GLOBAL_DNS_GROUP
+#define GLOB_DNS_INTERN_DOM_PREFIX  NM_CONFIG_KEYFILE_GROUPPREFIX_INTERN NM_CONFIG_DATA_GLOBAL_DNS_DOMAIN_PREFIX
+
 static NMGlobalDnsConfig *
 load_global_dns_config (GKeyFile *keyfile, gboolean internal)
 {
@@ -583,12 +603,8 @@ load_global_dns_config (GKeyFile *keyfile, gboolean internal)
 
 	g_return_val_if_fail (keyfile, NULL);
 
-	group = internal ?
-		NM_CONFIG_KEYFILE_GROUPPREFIX_INTERN NM_CONFIG_DATA_GLOBAL_DNS_GROUP :
-		NM_CONFIG_DATA_GLOBAL_DNS_GROUP;
-	domain_prefix = internal ?
-		NM_CONFIG_KEYFILE_GROUPPREFIX_INTERN NM_CONFIG_DATA_GLOBAL_DNS_DOMAIN_PREFIX :
-		NM_CONFIG_DATA_GLOBAL_DNS_GROUP;
+	group = internal ? GLOB_DNS_INTERN_GROUP : NM_CONFIG_DATA_GLOBAL_DNS_GROUP;
+	domain_prefix = internal ? GLOB_DNS_INTERN_DOM_PREFIX : NM_CONFIG_DATA_GLOBAL_DNS_GROUP;
 
 	if (!g_key_file_has_group (keyfile, group))
 		return NULL;
@@ -701,6 +717,151 @@ global_dns_config_equals (NMGlobalDnsConfig *old, NMGlobalDnsConfig *new)
 	}
 
 	return TRUE;
+}
+
+static NMGlobalDnsDomainConfig *
+build_dns_global_domain_from_hash (const char *name, GHashTable *hash)
+{
+	NMGlobalDnsDomainConfig *domain;
+	char **strv, **ptr;
+
+	domain = g_malloc0 (sizeof (NMGlobalDnsDomainConfig));
+
+	strv = g_hash_table_lookup (hash, "servers");
+	if (strv) {
+		for (ptr = strv; *ptr; ptr++)
+			domain->servers = g_slist_prepend (domain->servers, *ptr);
+		domain->servers = g_slist_reverse (domain->servers);
+	}
+
+	strv = g_hash_table_lookup (hash, "options");
+	if (strv) {
+		for (ptr = strv; *ptr; ptr++)
+			domain->options = g_slist_prepend (domain->options, *ptr);
+		domain->options = g_slist_reverse (domain->options);
+	}
+
+	return domain;
+}
+
+static GKeyFile *
+global_dns_config_update_keyfile (const NMConfigData *self, NMGlobalDnsConfig *dns_conf)
+{
+	GKeyFile *keyfile;
+	GHashTableIter iter;
+	char **groups;
+	int g;
+	gpointer key, value;
+	char **values;
+
+	g_return_val_if_fail (NM_IS_CONFIG_DATA (self), NULL);
+	g_return_val_if_fail (dns_conf, NULL);
+
+	keyfile = nm_config_data_clone_keyfile_intern (self);
+
+	/* Remove existing groups */
+	g_key_file_remove_group (keyfile, GLOB_DNS_INTERN_GROUP, NULL);
+
+	groups = g_key_file_get_groups (keyfile, NULL);
+	for (g = 0; groups[g]; g++) {
+		if (g_str_has_prefix (groups[g], GLOB_DNS_INTERN_DOM_PREFIX))
+			g_key_file_remove_group (keyfile, groups[g], NULL);
+	}
+	g_strfreev (groups);
+
+	/* Set new options */
+	values = slist_to_strv (dns_conf->searches);
+	g_key_file_set_string_list (keyfile, GLOB_DNS_INTERN_GROUP, "searches",
+	                            (const char *const *) values, g_strv_length (values));
+	g_strfreev (values);
+
+	values = slist_to_strv (dns_conf->options);
+	g_key_file_set_string_list (keyfile, GLOB_DNS_INTERN_GROUP, "options",
+	                            (const char *const *) values, g_strv_length (values));
+	g_strfreev (values);
+
+	g = 0;
+	g_hash_table_iter_init (&iter, dns_conf->domains);
+	while (g_hash_table_iter_next (&iter, &key, &value)) {
+		char group_name[32];
+		NMGlobalDnsDomainConfig *domain_conf = (NMGlobalDnsDomainConfig *) value;
+
+		snprintf (group_name, sizeof (group_name), GLOB_DNS_INTERN_DOM_PREFIX "%u", (unsigned int) g++);
+		g_key_file_set_string (keyfile, group_name, "domain", (char *) key);
+
+		if (domain_conf->servers) {
+			values = slist_to_strv (domain_conf->servers);
+			g_key_file_set_string_list (keyfile, group_name, "servers",
+			                            (const char *const *) values, g_strv_length (values));
+			g_strfreev (values);
+		}
+
+		if (domain_conf->options) {
+			values = slist_to_strv (domain_conf->options);
+			g_key_file_set_string_list (keyfile, group_name, "options",
+			                            (const char *const *) values, g_strv_length (values));
+			g_strfreev (values);
+		}
+	}
+
+	return keyfile;
+}
+
+GKeyFile *
+nm_config_data_update_global_dns_config (const NMConfigData *self,
+                                         GHashTable *hash,
+                                         GError **error)
+{
+	NMConfigDataPrivate *priv;
+	NMGlobalDnsConfig *config;
+	GValue *val;
+	char **strv, **ptr;
+
+	g_return_val_if_fail (NM_IS_CONFIG_DATA (self), FALSE);
+	priv = NM_CONFIG_DATA_GET_PRIVATE (self);
+
+	if (priv->global_dns_config && !priv->global_dns_config->internal) {
+		g_set_error_literal (error, 1, 0, "Global DNS configuration already set from user configuration");
+		return FALSE;
+	}
+
+	config = g_malloc0 (sizeof (NMGlobalDnsConfig));
+	config->domains = g_hash_table_new_full (g_str_hash, g_str_equal,
+	                                       g_free, free_global_dns_domain);
+
+	val = g_hash_table_lookup (hash, "searches");
+	if (val) {
+		strv = (char **) g_value_get_boxed (val);
+		for (ptr = strv; *ptr; ptr++)
+			config->searches = g_slist_prepend (config->searches, *ptr);
+		config->searches = g_slist_reverse (config->searches);
+	}
+
+	val = g_hash_table_lookup (hash, "options");
+	if (val) {
+		strv = (char **) g_value_get_boxed (val);
+		for (ptr = strv; *ptr; ptr++)
+			config->options = g_slist_prepend (config->options, *ptr);
+		config->options = g_slist_reverse (config->options);
+	}
+
+	val = g_hash_table_lookup (hash, "domains");
+	if (val) {
+		GHashTable *table = (GHashTable *) g_value_get_boxed (val);
+		GHashTableIter iter;
+		gpointer key, value;
+		NMGlobalDnsDomainConfig *domain;
+
+		g_hash_table_iter_init (&iter, table);
+		while (g_hash_table_iter_next (&iter, &key, &value)) {
+			domain = build_dns_global_domain_from_hash ((char *)key, (GHashTable *) value);
+			if (domain)
+				g_hash_table_insert (config->domains, g_strdup ((char *) key), domain);
+		}
+	}
+
+	nm_config_data_set_global_dns_config (self, config);
+	return global_dns_config_update_keyfile (self, config);
 }
 
 /************************************************************************/

@@ -137,6 +137,9 @@ gboolean nm_config_data_get_ignore_carrier (const NMConfigData *self, NMDevice *
 gboolean nm_config_data_get_assume_ipv6ll_only (const NMConfigData *self, NMDevice *device);
 NMGlobalDnsConfig *nm_config_data_get_global_dns_config (const NMConfigData *self);
 void nm_config_data_set_global_dns_config (const NMConfigData *self, NMGlobalDnsConfig *conf);
+GKeyFile *nm_config_data_update_global_dns_config (const NMConfigData *self,
+                                                   GHashTable *hash,
+                                                   GError **error);
 
 char *nm_config_data_get_connection_default (const NMConfigData *self,
                                              const char *property,
