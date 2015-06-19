@@ -98,6 +98,7 @@ typedef struct {
 	GSList *searches;
 	GSList *options;
 	GHashTable *domains;
+	gboolean internal;
 } NMGlobalDnsConfig;
 
 GType nm_config_data_get_type (void);
