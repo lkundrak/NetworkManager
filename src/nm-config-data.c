@@ -103,6 +103,16 @@ G_DEFINE_TYPE (NMConfigData, nm_config_data, G_TYPE_OBJECT)
 
 /************************************************************************/
 
+static gboolean
+_slist_str_equals (GSList *a, GSList *b)
+{
+	while (a && b && g_strcmp0 (a->data, b->data) == 0) {
+		a = a->next;
+		b = b->next;
+	}
+	return !a && !b;
+}
+
 const char *
 nm_config_data_get_config_main_file (const NMConfigData *self)
 {
@@ -600,16 +610,6 @@ _get_connection_infos (GKeyFile *keyfile)
 }
 
 /************************************************************************/
-
-static gboolean
-_slist_str_equals (GSList *a, GSList *b)
-{
-	while (a && b && g_strcmp0 (a->data, b->data) == 0) {
-		a = a->next;
-		b = b->next;
-	}
-	return !a && !b;
-}
 
 NMConfigChangeFlags
 nm_config_data_diff (NMConfigData *old_data, NMConfigData *new_data)
