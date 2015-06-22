@@ -92,6 +92,12 @@ G_STMT_START { \
 	(void) 0; \
 })
 
+#define log_assert_failed_unreachable(text, file, line, func) \
+G_STMT_START { \
+	log_internal (LOG_CRIT, 0, file, line, func, "Code should not be reached '%s' at %s:%u, function %s(). Aborting.", text, file, line, func); \
+	g_assert_not_reached (); \
+} G_STMT_END
+
 /*****************************************************************************/
 
 /* Can't include both net/if.h and linux/if.h; so have to define this here */
@@ -122,6 +128,10 @@ G_STMT_START { \
 static inline pid_t gettid(void) {
         return (pid_t) syscall(SYS_gettid);
 }
+
+static inline bool is_main_thread(void) {
+	return TRUE;
+ }
 
 #endif /* NM_SD_ADAPT_H */
 

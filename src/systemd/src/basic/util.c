@@ -109,6 +109,7 @@ assert_cc(EAGAIN == EWOULDBLOCK);
 #if 0 /* NM_IGNORED */
 int saved_argc = 0;
 char **saved_argv = NULL;
+#endif /* NM_IGNORED */
 
 size_t page_size(void) {
         static thread_local size_t pgsz = 0;
@@ -123,7 +124,6 @@ size_t page_size(void) {
         pgsz = (size_t) r;
         return pgsz;
 }
-#endif /* NM_IGNORED */
 
 int strcmp_ptr(const char *a, const char *b) {
 

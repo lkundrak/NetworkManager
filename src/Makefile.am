@@ -90,6 +90,17 @@ libsystemd_nm_la_SOURCES = \
 	systemd/src/libsystemd-network/sd-ipv4ll.c \
 	systemd/src/libsystemd-network/ipv4ll-packet.c \
 	systemd/src/libsystemd-network/ipv4ll-network.c \
+	systemd/src/libsystemd-network/lldp-internal.c \
+	systemd/src/libsystemd-network/lldp-internal.h \
+	systemd/src/libsystemd-network/lldp-network.c \
+	systemd/src/libsystemd-network/lldp-network.h \
+	systemd/src/libsystemd-network/lldp-port.c \
+	systemd/src/libsystemd-network/lldp-port.h \
+	systemd/src/libsystemd-network/lldp-tlv.c \
+	systemd/src/libsystemd-network/lldp-tlv.h \
+	systemd/src/libsystemd-network/lldp-util.h \
+	systemd/src/libsystemd-network/lldp.h \
+	systemd/src/libsystemd-network/sd-lldp.c \
 	systemd/src/basic/async.h \
 	systemd/src/basic/time-util.h \
 	systemd/src/basic/siphash24.h \
@@ -103,12 +114,19 @@ libsystemd_nm_la_SOURCES = \
 	systemd/src/basic/siphash24.c \
 	systemd/src/basic/util.h \
 	systemd/src/basic/in-addr-util.h \
+	systemd/src/basic/hashmap.c \
+	systemd/src/basic/hashmap.h \
 	systemd/src/basic/list.h \
+	systemd/src/basic/mempool.c \
+	systemd/src/basic/mempool.h \
 	systemd/src/basic/log.h \
 	systemd/src/basic/fileio.h \
 	systemd/src/basic/fileio.c \
 	systemd/src/basic/path-util.c \
 	systemd/src/basic/path-util.h \
+	systemd/src/basic/prioq.c \
+	systemd/src/basic/prioq.h \
+	systemd/src/basic/set.h \
 	systemd/src/basic/strv.h \
 	systemd/src/basic/strv.c \
 	systemd/src/basic/unaligned.h \
@@ -128,6 +146,7 @@ libsystemd_nm_la_SOURCES = \
 	systemd/src/systemd/sd-event.h \
 	systemd/src/systemd/_sd-common.h \
 	systemd/src/systemd/sd-ipv4ll.h \
+	systemd/src/systemd/sd-lldp.h \
 	systemd/nm-sd-adapt.h \
 	systemd/nm-sd-adapt.c
 
