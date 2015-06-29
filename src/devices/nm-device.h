@@ -356,7 +356,7 @@ RfKillType nm_device_get_rfkill_type (NMDevice *device);
 /**
  * NMUnmanagedFlags:
  * @NM_UNMANAGED_NONE: placeholder value
- * @NM_UNMANAGED_DEFAULT: %TRUE when unmanaged by default (ie, Generic devices)
+ * @NM_UNMANAGED_LOOPBACK: %TRUE for unmanaging loopback device
  * @NM_UNMANAGED_INTERNAL: %TRUE when unmanaged by internal decision (ie,
  *   because NM is sleeping or not managed for some other reason)
  * @NM_UNMANAGED_USER: %TRUE when unmanaged by user decision (via unmanaged-specs)
@@ -367,7 +367,7 @@ RfKillType nm_device_get_rfkill_type (NMDevice *device);
  */
 typedef enum {
 	NM_UNMANAGED_NONE          = 0,
-	NM_UNMANAGED_DEFAULT       = (1LL <<  0),
+	NM_UNMANAGED_LOOPBACK      = (1LL <<  0),
 	NM_UNMANAGED_INTERNAL      = (1LL <<  1),
 	NM_UNMANAGED_USER          = (1LL <<  2),
 	NM_UNMANAGED_PARENT        = (1LL <<  3),

@@ -1611,12 +1611,12 @@ recheck_assume_connection (NMDevice *device, gpointer user_data)
 {
 	NMManager *self = NM_MANAGER (user_data);
 	NMConnection *connection;
-	gboolean was_unmanaged = FALSE, success, generated;
+	gboolean success, generated;
 	NMDeviceState state;
 
 	if (manager_sleeping (self))
 		return FALSE;
-	if (nm_device_get_unmanaged_flag (device, NM_UNMANAGED_ALL & ~NM_UNMANAGED_DEFAULT))
+	if (nm_device_get_unmanaged_flag (device, NM_UNMANAGED_ALL))
 		return FALSE;
 
 	state = nm_device_get_state (device);
@@ -1630,34 +1630,12 @@ recheck_assume_connection (NMDevice *device, gpointer user_data)
 		return FALSE;
 	}
 
-	if (state == NM_DEVICE_STATE_UNMANAGED) {
-		was_unmanaged = TRUE;
-		nm_device_state_changed (device,
-		                         NM_DEVICE_STATE_UNAVAILABLE,
-		                         NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED);
-	}
-
 	success = assume_connection (self, device, connection);
-	if (!success) {
-		if (was_unmanaged) {
-			nm_device_state_changed (device,
-			                         NM_DEVICE_STATE_UNAVAILABLE,
-			                         NM_DEVICE_STATE_REASON_CONFIG_FAILED);
+	if (!success && generated) {
+		nm_log_dbg (LOGD_DEVICE, "(%s): connection assumption failed. Deleting generated connection",
+			    nm_device_get_iface (device));
 
-			/* Return default-unmanaged devices to their original state */
-			if (nm_device_get_unmanaged_flag (device, NM_UNMANAGED_DEFAULT)) {
-				nm_device_state_changed (device,
-				                         NM_DEVICE_STATE_UNMANAGED,
-				                         NM_DEVICE_STATE_REASON_CONFIG_FAILED);
-			}
-		}
-
-		if (generated) {
-			nm_log_dbg (LOGD_DEVICE, "(%s): connection assumption failed. Deleting generated connection",
-			            nm_device_get_iface (device));
-
-			nm_settings_connection_delete (NM_SETTINGS_CONNECTION (connection), NULL, NULL);
-		}
+		nm_settings_connection_delete (NM_SETTINGS_CONNECTION (connection), NULL, NULL);
 	}
 
 	return success;
