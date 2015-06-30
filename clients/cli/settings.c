@@ -59,6 +59,7 @@ NmcOutputField nmc_fields_setting_connection[] = {
 	SETTING_FIELD (NM_SETTING_CONNECTION_SECONDARIES, 40),           /* 14 */
 	SETTING_FIELD (NM_SETTING_CONNECTION_GATEWAY_PING_TIMEOUT, 30),  /* 15 */
 	SETTING_FIELD (NM_SETTING_CONNECTION_METERED, 10),               /* 16 */
+	SETTING_FIELD (NM_SETTING_CONNECTION_ENABLE_LLDP, 10),           /* 17 */
 	{NULL, NULL, 0, NULL, FALSE, FALSE, 0}
 };
 #define NMC_FIELDS_SETTING_CONNECTION_ALL     "name"","\
@@ -77,7 +78,8 @@ NmcOutputField nmc_fields_setting_connection[] = {
                                               NM_SETTING_CONNECTION_AUTOCONNECT_SLAVES","\
                                               NM_SETTING_CONNECTION_SECONDARIES","\
                                               NM_SETTING_CONNECTION_GATEWAY_PING_TIMEOUT","\
-                                              NM_SETTING_CONNECTION_METERED
+                                              NM_SETTING_CONNECTION_METERED","\
+                                              NM_SETTING_CONNECTION_ENABLE_LLDP
 #define NMC_FIELDS_SETTING_CONNECTION_COMMON  NMC_FIELDS_SETTING_CONNECTION_ALL
 
 /* Available fields for NM_SETTING_WIRED_SETTING_NAME */
@@ -2895,6 +2897,33 @@ nmc_property_connection_set_metered (NMSetting *setting, const char *prop,
 	return TRUE;
 }
 
+/* 'enable-lldp' */
+static char *
+nmc_property_connection_get_enable_lldp (NMSetting *setting, NmcPropertyGetType get_type)
+{
+	NMSettingConnection *s_conn = NM_SETTING_CONNECTION (setting);
+	NMSettingBoolean s_bool;
+
+	s_bool = nm_setting_connection_get_enable_lldp (s_conn);
+	return nm_utils_enum_to_str (nm_setting_boolean_get_type(), s_bool);
+}
+
+static gboolean
+nmc_property_connection_set_enable_lldp (NMSetting *setting, const char *prop,
+                                         const char *val, GError **error)
+{
+	NMSettingBoolean sb;
+
+	if (!nm_utils_enum_from_str (nm_setting_boolean_get_type (),
+	                             val, (int *) &sb, NULL)) {
+		g_set_error (error, 1, 0, _("invalid option '%s', use one of %s"), val, "[true, false, default]");
+		return FALSE;
+	}
+
+	g_object_set (setting, prop, sb, NULL);
+	return TRUE;
+}
+
 /* --- NM_SETTING_802_1X_SETTING_NAME property setter functions --- */
 #define DEFINE_SETTER_STR_LIST(def_func, set_func) \
 	static gboolean \
@@ -5590,6 +5619,13 @@ nmc_properties_init (void)
 	                    NULL,
 	                    NULL,
 	                    NULL);
+	nmc_add_prop_funcs (GLUE (CONNECTION, ENABLE_LLDP),
+	                    nmc_property_connection_get_enable_lldp,
+	                    nmc_property_connection_set_enable_lldp,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
 
 	/* Add editable properties for NM_SETTING_DCB_SETTING_NAME */
 	nmc_add_prop_funcs (GLUE (DCB, APP_FCOE_FLAGS),
@@ -6986,6 +7022,7 @@ setting_connection_details (NMSetting *setting, NmCli *nmc,  const char *one_pro
 	set_val_str (arr, 14, nmc_property_connection_get_secondaries (setting, NMC_PROPERTY_GET_PRETTY));
 	set_val_str (arr, 15, nmc_property_connection_get_gateway_ping_timeout (setting, NMC_PROPERTY_GET_PRETTY));
 	set_val_str (arr, 16, nmc_property_connection_get_metered (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 17, nmc_property_connection_get_enable_lldp (setting, NMC_PROPERTY_GET_PRETTY));
 	g_ptr_array_add (nmc->output_data, arr);
 
 	print_data (nmc);  /* Print all data */

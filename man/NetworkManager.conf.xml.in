@@ -586,6 +586,9 @@ ipv6.ip6-privacy=1
           <term><varname>connection.autoconnect-slaves</varname></term>
         </varlistentry>
         <varlistentry>
+          <term><varname>connection.enable-lldp</varname></term>
+        </varlistentry>
+        <varlistentry>
           <term><varname>ethernet.wake-on-lan</varname></term>
         </varlistentry>
       </variablelist>

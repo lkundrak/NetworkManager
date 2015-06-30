@@ -147,7 +147,6 @@ typedef enum {
 	/* 0x80000000 is used for a private flag */
 } NMSettingCompareFlags;
 
-
 /**
  * NMSetting:
  *

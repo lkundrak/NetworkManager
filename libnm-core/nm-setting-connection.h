@@ -60,6 +60,7 @@ G_BEGIN_DECLS
 #define NM_SETTING_CONNECTION_SECONDARIES    "secondaries"
 #define NM_SETTING_CONNECTION_GATEWAY_PING_TIMEOUT "gateway-ping-timeout"
 #define NM_SETTING_CONNECTION_METERED        "metered"
+#define NM_SETTING_CONNECTION_ENABLE_LLDP    "enable-lldp"
 
 /* Types for property values */
 /**
@@ -144,6 +145,8 @@ gboolean    nm_setting_connection_remove_secondary_by_value (NMSettingConnection
 guint32     nm_setting_connection_get_gateway_ping_timeout (NMSettingConnection *setting);
 NM_AVAILABLE_IN_1_2
 NMMetered   nm_setting_connection_get_metered (NMSettingConnection *setting);
+NM_AVAILABLE_IN_1_2
+NMSettingBoolean nm_setting_connection_get_enable_lldp (NMSettingConnection *setting);
 
 G_END_DECLS
 
