@@ -1413,6 +1413,90 @@ nm_config_get_device_match_spec (const GKeyFile *keyfile, const char *group, con
 
 /************************************************************************/
 
+gboolean
+nm_config_set_global_dns (NMConfig *self, NMConfigGlobalDns *global_dns, GError **error)
+{
+	NMConfigPrivate *priv;
+	GKeyFile *keyfile;
+	char **groups, **values;
+	const NMConfigGlobalDns *old_global_dns;
+	GHashTableIter iter;
+	gpointer key, value;
+	int g;
+
+	g_return_val_if_fail (NM_IS_CONFIG (self), FALSE);
+
+	priv = NM_CONFIG_GET_PRIVATE (self);
+	g_return_val_if_fail (priv->config_data, FALSE);
+
+	old_global_dns = nm_config_data_get_global_dns (priv->config_data);
+	if (old_global_dns && !old_global_dns->internal) {
+		g_set_error_literal (error, 1, 0,
+		                     "Global DNS configuration already set from user configuration");
+		return FALSE;
+	}
+
+	keyfile = nm_config_data_clone_keyfile_intern (priv->config_data);
+
+	/* Remove existing groups */
+	g_key_file_remove_group (keyfile, NM_CONFIG_KEYFILE_GROUP_INTERN_GLOBAL_DNS, NULL);
+	groups = g_key_file_get_groups (keyfile, NULL);
+	for (g = 0; groups[g]; g++) {
+		if (g_str_has_prefix (groups[g], NM_CONFIG_KEYFILE_GROUPPREFIX_INTERN_GLOBAL_DNS_DOMAIN))
+			g_key_file_remove_group (keyfile, groups[g], NULL);
+	}
+	g_strfreev (groups);
+
+	/* An empty configuration removes everything from internal configuration file */
+	if (!global_dns->searches && !global_dns->options && !g_hash_table_size (global_dns->domains))
+		goto done;
+
+	/* Set new values */
+	g_key_file_set_string (keyfile, NM_CONFIG_KEYFILE_GROUP_INTERN_GLOBAL_DNS, "enable", "yes");
+
+	if (global_dns->searches) {
+		values = _nm_utils_slist_to_strv (global_dns->searches, FALSE);
+		nm_config_keyfile_set_string_list (keyfile, NM_CONFIG_KEYFILE_GROUP_INTERN_GLOBAL_DNS,
+		                                   "searches", (const char * const *) values, -1);
+		g_free (values);
+	}
+
+	if (global_dns->options) {
+		values = _nm_utils_slist_to_strv (global_dns->options, FALSE);
+		nm_config_keyfile_set_string_list (keyfile, NM_CONFIG_KEYFILE_GROUP_INTERN_GLOBAL_DNS,
+		                                   "options", (const char * const *) values, -1);
+		g_free (values);
+	}
+
+	g_hash_table_iter_init (&iter, global_dns->domains);
+	while (g_hash_table_iter_next (&iter, &key, &value)) {
+		NMConfigGlobalDnsDomain *domain_conf = (NMConfigGlobalDnsDomain *) value;
+		gs_free char *group_name;
+
+		group_name = g_strdup_printf (NM_CONFIG_KEYFILE_GROUPPREFIX_INTERN_GLOBAL_DNS_DOMAIN "%s", (char *) key);
+
+		if (domain_conf->servers) {
+			values = _nm_utils_slist_to_strv (domain_conf->servers, FALSE);
+			nm_config_keyfile_set_string_list (keyfile, group_name, "servers",
+			                                   (const char * const *) values, -1);
+			g_free (values);
+		}
+
+		if (domain_conf->options) {
+			values = _nm_utils_slist_to_strv (domain_conf->options, FALSE);
+			nm_config_keyfile_set_string_list (keyfile, group_name, "options",
+			                                   (const char * const *) values, -1);
+			g_free (values);
+		}
+	}
+
+done:
+	nm_config_set_values (self, keyfile, TRUE, FALSE);
+	g_key_file_unref (keyfile);
+
+	return TRUE;
+}
+
 /**
  * nm_config_set_values:
  * @self: the NMConfig instance

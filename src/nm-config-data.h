@@ -147,6 +147,10 @@ char **nm_config_data_get_groups (const NMConfigData *self);
 char **nm_config_data_get_keys (const NMConfigData *self, const char *group);
 gboolean nm_config_data_is_intern_atomic_group (const NMConfigData *self, const char *group);
 
+NMConfigGlobalDns *nm_config_data_global_dns_from_dbus (const GValue *value, GError **error);
+void nm_config_data_global_dns_config_to_dbus (const NMConfigGlobalDns *dns_config, GValue *value);
+void nm_config_data_free_global_dns (NMConfigGlobalDns *conf);
+
 GKeyFile *nm_config_data_clone_keyfile_intern (const NMConfigData *self);
 
 /* private accessors */
