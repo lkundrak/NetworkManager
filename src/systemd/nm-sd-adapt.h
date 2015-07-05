@@ -91,6 +91,12 @@ G_STMT_START { \
 	g_return_if_fail_warning (G_LOG_DOMAIN, G_STRFUNC, text); \
 } G_STMT_END
 
+#define assert_log(expr) \
+({ \
+	if (!(expr)) \
+		log_assert_failed_return(#expr, __FILE__, __LINE__, __PRETTY_FUNCTION__); \
+	!!(expr); \
+})
 
 /*****************************************************************************/
 
