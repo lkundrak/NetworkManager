@@ -86,16 +86,10 @@ G_STMT_START { \
 } G_STMT_END
 
 #define log_assert_failed_return(text, file, line, func) \
-G_STMT_START { \
+({ \
 	log_internal (LOG_DEBUG, 0, file, line, func, "Assertion '%s' failed at %s:%u, function %s(). Ignoring.", text, file, line, func); \
 	g_return_if_fail_warning (G_LOG_DOMAIN, G_STRFUNC, text); \
-} G_STMT_END
-
-#define assert_log(expr) \
-({ \
-	if (!(expr)) \
-		log_assert_failed_return(#expr, __FILE__, __LINE__, __PRETTY_FUNCTION__); \
-	!!(expr); \
+	(void) 0; \
 })
 
 /*****************************************************************************/

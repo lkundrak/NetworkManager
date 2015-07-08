@@ -250,11 +250,9 @@ static inline unsigned long ALIGN_POWER2(unsigned long u) {
         REENABLE_WARNING
 #endif
 
-#if 0 /* NM_IGNORED */
 #define assert_log(expr) ((_likely_(expr))      \
         ? (true)                                \
         : (log_assert_failed_return(#expr, __FILE__, __LINE__, __PRETTY_FUNCTION__), false))
-#endif /* NM_IGNORED */
 
 #define assert_return(expr, r)                                          \
         do {                                                            \
