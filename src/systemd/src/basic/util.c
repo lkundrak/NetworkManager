@@ -1561,6 +1561,7 @@ void safe_close_pair(int p[]) {
         p[0] = safe_close(p[0]);
         p[1] = safe_close(p[1]);
 }
+
 #endif /* NM_IGNORED */
 ssize_t loop_read(int fd, void *buf, size_t nbytes, bool do_poll) {
         uint8_t *p = buf;
@@ -1611,6 +1612,7 @@ int loop_read_exact(int fd, void *buf, size_t nbytes, bool do_poll) {
                 return -EIO;
         return 0;
 }
+
 #if 0 /* NM_IGNORED */
 int loop_write(int fd, const void *buf, size_t nbytes, bool do_poll) {
         const uint8_t *p = buf;
