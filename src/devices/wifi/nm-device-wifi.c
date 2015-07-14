@@ -1052,6 +1052,7 @@ impl_device_get_all_access_points (NMDeviceWifi *self,
 static void
 request_scan_cb (NMDevice *device,
                  DBusGMethodInvocation *context,
+                 NMAuthSubject *subject,
                  GError *error,
                  gpointer user_data)
 {

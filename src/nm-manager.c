@@ -1353,6 +1353,7 @@ device_auth_done_cb (NMAuthChain *chain,
 	NMDevice *device;
 	const char *permission;
 	NMDeviceAuthRequestFunc callback;
+	NMAuthSubject *subject;
 
 	g_assert (context);
 
@@ -1366,6 +1367,7 @@ device_auth_done_cb (NMAuthChain *chain,
 	g_assert (device);
 
 	result = nm_auth_chain_get_result (chain, permission);
+	subject = nm_auth_chain_get_subject (chain);
 
 	if (auth_error) {
 		/* translate the auth error into a manager permission denied error */
@@ -1386,6 +1388,7 @@ device_auth_done_cb (NMAuthChain *chain,
 
 	callback (device,
 	          context,
+	          subject,
 	          error,
 	          nm_auth_chain_get_data (chain, "user-data"));
 
@@ -1446,9 +1449,10 @@ device_auth_request_cb (NMDevice *device,
 	nm_auth_chain_add_call (chain, permission, allow_interaction);
 
 done:
-	g_clear_object (&subject);
 	if (error)
-		callback (device, context, error, user_data);
+		callback (device, context, subject, error, user_data);
+
+	g_clear_object (&subject);
 	g_clear_error (&error);
 }
 
