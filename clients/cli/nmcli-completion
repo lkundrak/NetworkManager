@@ -1293,7 +1293,7 @@ _nmcli()
                                     ;;
                                 r|re|res|resc|resca|rescan)
                                     _nmcli_array_delete_at words 0 2
-                                    OPTIONS=(ifname)
+                                    OPTIONS=(ifname ssid)
                                     _nmcli_compl_ARGS
                                     ;;
                             esac
