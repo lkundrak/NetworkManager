@@ -134,6 +134,9 @@ enum {
 #define PENDING_ACTION_DHCP6 "dhcp6"
 #define PENDING_ACTION_AUTOCONF6 "autoconf6"
 
+#define DHCP_RESTART_TIMEOUT      60
+#define DHCP_NUM_RESTARTS_MAX     3
+
 typedef enum {
 	CLEANUP_TYPE_DECONFIGURE,
 	CLEANUP_TYPE_KEEP,
@@ -280,6 +283,8 @@ typedef struct {
 	gulong          dhcp4_state_sigid;
 	NMDhcp4Config * dhcp4_config;
 	guint           dhcp4_restart_id;
+	guint           dhcp4_num_restarts_left;
+	gboolean        dhcp4_restarted;
 	NMIP4Config *   vpn4_config;  /* routes added by a VPN which uses this device */
 
 	guint           arp_round2_id;
@@ -326,6 +331,8 @@ typedef struct {
 	/* Event ID of the current IP6 config from DHCP */
 	char *          dhcp6_event_id;
 	guint           dhcp6_restart_id;
+	guint           dhcp6_num_restarts_left;
+	gboolean        dhcp6_restarted;
 
 	/* allow autoconnect feature */
 	gboolean        autoconnect;
@@ -3641,35 +3648,46 @@ dhcp4_restart_cb (gpointer user_data)
 	priv->dhcp4_restart_id = 0;
 	connection = nm_device_get_connection (self);
 
-	if (dhcp4_start (self, connection, &reason) == NM_ACT_STAGE_RETURN_FAILURE)
-		priv->dhcp4_restart_id = g_timeout_add_seconds (120, dhcp4_restart_cb, self);
+	if (dhcp4_start (self, connection, &reason) == NM_ACT_STAGE_RETURN_FAILURE) {
+		priv->dhcp4_restart_id = g_timeout_add_seconds (DHCP_RESTART_TIMEOUT,
+		                                                dhcp4_restart_cb, self);
+	}
 
-	return FALSE;
+	return G_SOURCE_REMOVE;
 }
 
 static void
 dhcp4_fail (NMDevice *self, gboolean timeout)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	gboolean has_address = FALSE;
+
+	_LOGD (LOGD_DEVICE, "dhcp4 failed: timeout %d, restarted %d, num restarts left %u",
+	       timeout, priv->dhcp4_restarted, priv->dhcp4_num_restarts_left);
 
 	dhcp4_cleanup (self, CLEANUP_TYPE_DECONFIGURE, FALSE);
 
-	/* Don't fail if there are static addresses configured on
-	 * the device, instead retry after some time.
-	 */
-	if (   priv->ip4_state == IP_DONE
-	    && priv->con_ip4_config
-	    && nm_ip4_config_get_num_addresses (priv->con_ip4_config) > 0) {
-		_LOGI (LOGD_DHCP4, "Scheduling DHCPv4 restart because device has IP addresses");
-		priv->dhcp4_restart_id = g_timeout_add_seconds (120, dhcp4_restart_cb, self);
-		return;
-	}
-
-	if (timeout || (priv->ip4_state == IP_CONF))
+	if (!priv->dhcp4_restarted && (timeout || (priv->ip4_state == IP_CONF)))
 		nm_device_activate_schedule_ip4_config_timeout (self);
-	else if (priv->ip4_state == IP_DONE)
-		nm_device_state_changed (self, NM_DEVICE_STATE_FAILED, NM_DEVICE_STATE_REASON_IP_CONFIG_EXPIRED);
-	else
+	else if (priv->ip4_state == IP_DONE) {
+		/* Don't fail the IP4 method immediately if the lease expired but try to
+		   restart DHCP a number of times. If there are static addresses
+		   configured on the device, never fail the connection.*/
+		if (   priv->con_ip4_config
+		    && nm_ip4_config_get_num_addresses (priv->con_ip4_config) > 0)
+			has_address = TRUE;
+
+		if (has_address || priv->dhcp4_num_restarts_left) {
+			_LOGI (LOGD_DEVICE, "restarting DHCP4 in %d seconds", DHCP_RESTART_TIMEOUT);
+			priv->dhcp4_restart_id = g_timeout_add_seconds (DHCP_RESTART_TIMEOUT,
+			                                                dhcp4_restart_cb, self);
+			priv->dhcp4_restarted = TRUE;
+			if (priv->dhcp4_num_restarts_left)
+				priv->dhcp4_num_restarts_left--;
+		} else
+			nm_device_ip4_method_failed (self, NM_DEVICE_STATE_REASON_IP_CONFIG_EXPIRED);
+		return;
+	} else
 		g_warn_if_reached ();
 }
 
@@ -3701,6 +3719,8 @@ dhcp4_state_changed (NMDhcpClient *client,
 
 		nm_dhcp4_config_set_options (priv->dhcp4_config, options);
 		g_object_notify (G_OBJECT (self), NM_DEVICE_DHCP4_CONFIG);
+		priv->dhcp4_num_restarts_left = DHCP_NUM_RESTARTS_MAX;
+		priv->dhcp4_restarted = FALSE;
 
 		if (priv->ip4_state == IP_CONF)
 			nm_device_activate_schedule_ip4_config_result (self, ip4_config);
@@ -4021,6 +4041,8 @@ act_stage3_ip4_config_start (NMDevice *self,
 	}
 
 	method = nm_utils_get_ip_config_method (connection, NM_TYPE_SETTING_IP4_CONFIG);
+	priv->dhcp4_num_restarts_left = DHCP_NUM_RESTARTS_MAX;
+	priv->dhcp4_restarted = FALSE;
 
 	/* Start IPv4 addressing based on the method requested */
 	if (strcmp (method, NM_SETTING_IP4_CONFIG_METHOD_AUTO) == 0)
@@ -4299,35 +4321,46 @@ dhcp6_restart_cb (gpointer user_data)
 	priv = NM_DEVICE_GET_PRIVATE (self);
 	priv->dhcp6_restart_id = 0;
 
-	if (!dhcp6_start (self, FALSE, &reason))
-		priv->dhcp6_restart_id = g_timeout_add_seconds (120, dhcp6_restart_cb, self);
+	if (!dhcp6_start (self, FALSE, &reason)) {
+		priv->dhcp6_restart_id = g_timeout_add_seconds (DHCP_RESTART_TIMEOUT,
+		                                                dhcp6_restart_cb, self);
+	}
 
-	return FALSE;
+	return G_SOURCE_REMOVE;
 }
 
 static void
 dhcp6_fail (NMDevice *self, gboolean timeout)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	gboolean has_address = FALSE;
+
+	_LOGD (LOGD_DEVICE, "dhcp6 failed: timeout %d, restarted %d, num restarts left %u",
+	       timeout, priv->dhcp6_restarted, priv->dhcp6_num_restarts_left);
 
 	dhcp6_cleanup (self, CLEANUP_TYPE_DECONFIGURE, FALSE);
 
 	if (priv->dhcp6_mode == NM_RDISC_DHCP_LEVEL_MANAGED) {
-		/* Don't fail if there are static addresses configured on
-		 * the device, instead retry after some time.
-		 */
-		if (   priv->ip6_state == IP_DONE
-		    && priv->con_ip6_config
-		    && nm_ip6_config_get_num_addresses (priv->con_ip6_config)) {
-			_LOGI (LOGD_DHCP6, "Scheduling DHCPv6 restart because device has IP addresses");
-			priv->dhcp6_restart_id = g_timeout_add_seconds (120, dhcp6_restart_cb, self);
-			return;
-		}
-
-		if (timeout || (priv->ip6_state == IP_CONF))
+		if (!priv->dhcp6_restarted && (timeout || (priv->ip6_state == IP_CONF)))
 			nm_device_activate_schedule_ip6_config_timeout (self);
-		else if (priv->ip6_state == IP_DONE)
-			nm_device_state_changed (self, NM_DEVICE_STATE_FAILED, NM_DEVICE_STATE_REASON_IP_CONFIG_EXPIRED);
+		else if (priv->ip6_state == IP_DONE) {
+			/* Don't fail the IP6 method immediately if the lease expired but try to
+			   restart DHCP a number of times. If there are static addresses
+			   configured on the device, never fail the connection.*/
+			if (   priv->con_ip6_config
+			    && nm_ip6_config_get_num_addresses (priv->con_ip6_config) > 0)
+				has_address = TRUE;
+			
+			if (has_address || priv->dhcp6_num_restarts_left) {
+				_LOGI (LOGD_DEVICE, "restarting DHCP6 in %d seconds", DHCP_RESTART_TIMEOUT);
+				priv->dhcp6_restart_id = g_timeout_add_seconds (DHCP_RESTART_TIMEOUT,
+				                                                dhcp6_restart_cb, self);
+				priv->dhcp6_restarted = TRUE;
+				if (priv->dhcp6_num_restarts_left)
+					priv->dhcp6_num_restarts_left--;
+			} else
+				nm_device_ip6_method_failed (self, NM_DEVICE_STATE_REASON_IP_CONFIG_EXPIRED);
+		}
 		else
 			g_warn_if_reached ();
 	} else {
@@ -4393,6 +4426,9 @@ dhcp6_state_changed (NMDhcpClient *client,
 				g_object_notify (G_OBJECT (self), NM_DEVICE_DHCP6_CONFIG);
 			}
 		}
+
+		priv->dhcp6_num_restarts_left = DHCP_NUM_RESTARTS_MAX;
+		priv->dhcp6_restarted = FALSE;
 
 		if (priv->ip6_state == IP_CONF) {
 			if (priv->dhcp6_ip6_config == NULL) {
@@ -5267,6 +5303,8 @@ act_stage3_ip6_config_start (NMDevice *self,
 	}
 
 	priv->dhcp6_mode = NM_RDISC_DHCP_LEVEL_NONE;
+	priv->dhcp6_num_restarts_left = DHCP_NUM_RESTARTS_MAX;
+	priv->dhcp6_restarted = FALSE;
 
 	method = nm_utils_get_ip_config_method (connection, NM_TYPE_SETTING_IP6_CONFIG);
 
@@ -5315,6 +5353,7 @@ act_stage3_ip6_config_start (NMDevice *self,
 		ret = linklocal6_start (self);
 	} else if (strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_DHCP) == 0) {
 		priv->dhcp6_mode = NM_RDISC_DHCP_LEVEL_MANAGED;
+
 		if (!dhcp6_start (self, TRUE, reason)) {
 			/* IPv6 might be disabled; allow IPv4 to proceed */
 			ret = NM_ACT_STAGE_RETURN_STOP;
