@@ -85,9 +85,10 @@ gboolean nm_bus_manager_get_caller_info_from_message (NMBusManager *self,
 
 void nm_bus_manager_register_object (NMBusManager *self,
                                      const char *path,
-                                     gpointer object);
+                                     GDBusObjectSkeleton *object);
 
-void nm_bus_manager_unregister_object (NMBusManager *self, gpointer object);
+void nm_bus_manager_unregister_object (NMBusManager *self,
+                                       GDBusObjectSkeleton *object);
 
 gpointer nm_bus_manager_get_registered_object (NMBusManager *self,
                                                const char *path);

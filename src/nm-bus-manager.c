@@ -35,6 +35,8 @@
 #include <string.h>
 #include "NetworkManagerUtils.h"
 
+#include "gsystem-local-alloc.h"
+
 #define PRIV_SOCK_PATH NMRUNDIR "/private"
 #define PRIV_SOCK_TAG  "private"
 
@@ -57,7 +59,7 @@ typedef struct _PrivateServer PrivateServer;
 
 typedef struct {
 	GDBusConnection *connection;
-	GHashTable *exported;
+	GDBusObjectManagerServer *manager;
 	gboolean started;
 
 	GSList *private_servers;
@@ -72,7 +74,13 @@ typedef struct {
 static gboolean nm_bus_manager_init_bus (NMBusManager *self);
 static void nm_bus_manager_cleanup (NMBusManager *self);
 static void start_reconnection_timeout (NMBusManager *self);
-static void object_destroyed (NMBusManager *self, gpointer object);
+
+/* The base path for our GDBusObjectManagerServers.  They do not contain
+ * "NetworkManager" because GDBusObjectManagerServer requires that all
+ * exported objects be *below* the base path, and eg the Manager object
+ * is the base path already.
+ */
+#define OBJECT_MANAGER_SERVER_BASE_PATH "/org/freedesktop"
 
 NM_DEFINE_SINGLETON_REGISTER (NMBusManager);
 
@@ -109,17 +117,30 @@ struct _PrivateServer {
 	GQuark detail;
 	char *address;
 	GDBusServer *server;
-	GHashTable *connections;
+
+	/* With peer bus connections, we'll get a new connection for each
+	 * client.  For each connection we create an ObjectManager for
+	 * that connection to handle exporting our objects.  This table
+	 * maps GDBusObjectManager :: 'fake sender'.
+	 *
+	 * Note that even for connections that don't export any objects
+	 * we'll still create GDBusObjectManager since that's where we store
+	 * the pointer to the GDBusConnection.
+	 */
+	GHashTable *managers;
+
 	NMBusManager *manager;
 };
 
 static void
-private_server_closed (GDBusConnection *conn,
-                       gboolean remote_peer_vanished,
-                       GError *error,
-                       gpointer user_data)
+private_server_closed_connection (GDBusConnection *conn,
+                                  gboolean remote_peer_vanished,
+                                  GError *error,
+                                  gpointer user_data)
 {
 	PrivateServer *s = user_data;
+	GHashTableIter iter;
+	GDBusObjectManagerServer *manager;
 
 	/* Clean up after the connection */
 	nm_log_dbg (LOGD_CORE, "(%s) closed connection %p on private socket.",
@@ -131,7 +152,13 @@ private_server_closed (GDBusConnection *conn,
 	               s->detail,
 	               conn);
 
-	g_hash_table_remove (s->connections, conn);
+	g_hash_table_iter_init (&iter, s->managers);
+	while (g_hash_table_iter_next (&iter, (gpointer) &manager, NULL)) {
+		if (g_dbus_object_manager_server_get_connection (manager) == conn) {
+			g_hash_table_iter_remove (&iter);
+			break;
+		}
+	}
 }
 
 static gboolean
@@ -141,13 +168,17 @@ private_server_new_connection (GDBusServer *server,
 {
 	PrivateServer *s = user_data;
 	static guint32 counter = 0;
+	GDBusObjectManagerServer *manager;
 	char *sender;
 
-	g_signal_connect (conn, "closed", G_CALLBACK (private_server_closed), s);
+	g_signal_connect (conn, "closed", G_CALLBACK (private_server_closed_connection), s);
 
 	/* Fake a sender since private connections don't have one */
 	sender = g_strdup_printf ("x:y:%d", counter++);
-	g_hash_table_insert (s->connections, g_object_ref (conn), sender);
+
+	manager = g_dbus_object_manager_server_new (OBJECT_MANAGER_SERVER_BASE_PATH);
+	g_dbus_object_manager_server_set_connection (manager, conn);
+	g_hash_table_insert (s->managers, manager, sender);
 
 	nm_log_dbg (LOGD_CORE, "(%s) accepted connection %p on private socket.",
 	            s->tag, conn);
@@ -156,16 +187,20 @@ private_server_new_connection (GDBusServer *server,
 	g_signal_emit (s->manager,
 	               signals[PRIVATE_CONNECTION_NEW],
 	               s->detail,
-	               conn);
+	               conn,
+	               manager);
 	return TRUE;
 }
 
 static void
-private_server_dbus_connection_destroy (GDBusConnection *conn)
+private_server_manager_destroy (GDBusObjectManagerServer *manager)
 {
-	if (!g_dbus_connection_is_closed (conn))
-		g_dbus_connection_close (conn, NULL, NULL, NULL);
-	g_object_unref (conn);
+	GDBusConnection *connection = g_dbus_object_manager_server_get_connection (manager);
+
+	if (!g_dbus_connection_is_closed (connection))
+		g_dbus_connection_close (connection, NULL, NULL, NULL);
+	g_dbus_object_manager_server_set_connection (manager, NULL);
+	g_object_unref (manager);
 }
 
 static gboolean
@@ -219,9 +254,9 @@ private_server_new (const char *path,
 	g_signal_connect (server, "new-connection",
 	                  G_CALLBACK (private_server_new_connection), s);
 
-	s->connections = g_hash_table_new_full (g_direct_hash, g_direct_equal,
-	                                        (GDestroyNotify) private_server_dbus_connection_destroy,
-	                                        g_free);
+	s->managers = g_hash_table_new_full (g_direct_hash, g_direct_equal,
+	                                     (GDestroyNotify) private_server_manager_destroy,
+	                                     g_free);
 	s->manager = manager;
 	s->detail = g_quark_from_string (tag);
 	s->tag = g_quark_to_string (s->detail);
@@ -238,7 +273,7 @@ private_server_free (gpointer ptr)
 
 	unlink (s->address);
 	g_free (s->address);
-	g_hash_table_destroy (s->connections);
+	g_hash_table_destroy (s->managers);
 
 	g_dbus_server_stop (s->server);
 	g_object_unref (s->server);
@@ -275,10 +310,56 @@ nm_bus_manager_private_server_register (NMBusManager *self,
 static const char *
 private_server_get_connection_owner (PrivateServer *s, GDBusConnection *connection)
 {
+	GHashTableIter iter;
+	GDBusObjectManagerServer *manager;
+	const char *owner;
+
 	g_return_val_if_fail (s != NULL, NULL);
 	g_return_val_if_fail (connection != NULL, NULL);
 
-	return g_hash_table_lookup (s->connections, connection);
+	g_hash_table_iter_init (&iter, s->managers);
+	while (g_hash_table_iter_next (&iter, (gpointer) &manager, (gpointer) &owner)) {
+		if (g_dbus_object_manager_server_get_connection (manager) == connection)
+			return owner;
+	}
+	return NULL;
+}
+
+static GDBusConnection *
+private_server_get_connection_by_owner (PrivateServer *s, const char *owner)
+{
+	GHashTableIter iter;
+	GDBusObjectManagerServer *manager;
+	const char *priv_sender;
+
+	g_hash_table_iter_init (&iter, s->managers);
+	while (g_hash_table_iter_next (&iter, (gpointer) &manager, (gpointer) &priv_sender)) {
+		if (g_strcmp0 (owner, priv_sender) == 0)
+			return g_dbus_object_manager_server_get_connection (manager);
+	}
+	return NULL;
+}
+
+static void
+private_server_register_object (PrivateServer *s, GDBusObjectSkeleton *object)
+{
+	GHashTableIter iter;
+	GDBusObjectManagerServer *manager;
+
+	g_hash_table_iter_init (&iter, s->managers);
+	while (g_hash_table_iter_next (&iter, (gpointer) &manager, NULL))
+		g_dbus_object_manager_server_export (manager, object);
+}
+
+static void
+private_server_unregister_object (PrivateServer *s, const char *path)
+{
+	GHashTableIter iter;
+	GDBusObjectManagerServer *manager;
+
+	g_hash_table_iter_init (&iter, s->managers);
+	while (g_hash_table_iter_next (&iter, (gpointer) &manager, NULL))
+		g_dbus_object_manager_server_unexport (manager, path);
 }
 
 /**************************************************************/
@@ -366,7 +447,7 @@ _get_caller_info (NMBusManager *self,
 		for (iter = priv->private_servers; iter; iter = g_slist_next (iter)) {
 			PrivateServer *s = iter->data;
 
-			sender = g_hash_table_lookup (s->connections, connection);
+			sender = private_server_get_connection_owner (s, connection);
 			if (sender) {
 				if (out_uid)
 					*out_uid = 0;
@@ -449,17 +530,10 @@ nm_bus_manager_get_unix_user (NMBusManager *self,
 	g_return_val_if_fail (out_uid != NULL, FALSE);
 
 	/* Check if it's a private connection sender, which we fake */
-	for (iter = priv->private_servers; iter; iter = g_slist_next (iter)) {
-		PrivateServer *s = iter->data;
-		GHashTableIter hiter;
-		const char *priv_sender;
-
-		g_hash_table_iter_init (&hiter, s->connections);
-		while (g_hash_table_iter_next (&hiter, NULL, (gpointer) &priv_sender)) {
-			if (g_strcmp0 (sender, priv_sender) == 0) {
-				*out_uid = 0;
-				return TRUE;
-			}
+	for (iter = priv->private_servers; iter; iter = iter->next) {
+		if (private_server_get_connection_by_owner (iter->data, sender)) {
+			*out_uid = 0;
+			return TRUE;
 		}
 	}
 
@@ -477,31 +551,25 @@ nm_bus_manager_get_unix_user (NMBusManager *self,
 /**************************************************************/
 
 static void
-private_connection_new (NMBusManager *self, GDBusConnection *connection)
+manager_private_connection_new (NMBusManager *self,
+                                GDBusConnection *connection,
+                                GDBusObjectManagerServer *manager,
+                                gpointer user_data)
 {
 	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);
-	GHashTableIter iter;
-	GDBusInterfaceSkeleton *interface;
-	const char *path;
-	GError *error = NULL;
+	GList *objects, *iter;
 
-	/* Register all exported objects on this private connection */
-	g_hash_table_iter_init (&iter, priv->exported);
-	while (g_hash_table_iter_next (&iter, (gpointer) &interface, (gpointer) &path)) {
-		if (g_dbus_interface_skeleton_export (interface, connection, path, &error)) {
-			nm_log_trace (LOGD_CORE, "(%s) registered %p (%s) at '%s' on private socket.",
-			              PRIV_SOCK_TAG, interface, G_OBJECT_TYPE_NAME (interface), path);
-		} else {
-			nm_log_warn (LOGD_CORE, "(%s) could not register %p (%s) at '%s' on private socket: %s.",
-			             PRIV_SOCK_TAG, interface, G_OBJECT_TYPE_NAME (interface), path,
-			             error->message);
-			g_clear_error (&error);
-		}
+	/* Register all exported objects on the new private connection */
+	objects = g_dbus_object_manager_get_objects (G_DBUS_OBJECT_MANAGER (priv->manager));
+	for (iter = objects; iter; iter = iter->next) {
+		g_dbus_object_manager_server_export (manager, G_DBUS_OBJECT_SKELETON (iter->data));
+		g_object_unref (G_OBJECT (iter->data));
 	}
+	g_list_free (objects);
 }
 
 static void
-private_server_setup (NMBusManager *self)
+manager_private_server_setup (NMBusManager *self)
 {
 	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);
 
@@ -519,7 +587,7 @@ private_server_setup (NMBusManager *self)
 		priv->private_servers = g_slist_append (priv->private_servers, priv->priv_server);
 		g_signal_connect (self,
 		                  NM_BUS_MANAGER_PRIVATE_CONNECTION_NEW "::" PRIV_SOCK_TAG,
-		                  (GCallback) private_connection_new,
+		                  (GCallback) manager_private_connection_new,
 		                  NULL);
 	}
 }
@@ -527,11 +595,9 @@ private_server_setup (NMBusManager *self)
 static void
 nm_bus_manager_init (NMBusManager *self)
 {
-	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);
+	NM_BUS_MANAGER_GET_PRIVATE (self)->manager = g_dbus_object_manager_server_new (OBJECT_MANAGER_SERVER_BASE_PATH);
 
-	priv->exported = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_free);
-
-	private_server_setup (self);
+	manager_private_server_setup (self);
 }
 
 static void
@@ -539,23 +605,27 @@ nm_bus_manager_dispose (GObject *object)
 {
 	NMBusManager *self = NM_BUS_MANAGER (object);
 	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);
-	GHashTableIter iter;
-	GObject *exported;
-
-	if (priv->exported) {
-		g_hash_table_iter_init (&iter, priv->exported);
-		while (g_hash_table_iter_next (&iter, (gpointer) &exported, NULL))
-			g_object_weak_unref (exported, (GWeakNotify) object_destroyed, self);
-
-		g_hash_table_destroy (priv->exported);
-		priv->exported = NULL;
-	}
+	GList *exported, *iter;
 
 	g_slist_free_full (priv->private_servers, private_server_free);
 	priv->private_servers = NULL;
 	priv->priv_server = NULL;
 
 	nm_bus_manager_cleanup (self);
+
+	/* The ObjectManager owns the last reference to many exported
+	 * objects, and when that reference is dropped the objects unregister
+	 * themselves via nm_bus_manager_unregister_object().  By that time
+	 * priv->manager is already NULL and that prints warnings.  Unregister
+	 * them before clearing the ObjectManager instead.
+	 */
+	exported = g_dbus_object_manager_get_objects (G_DBUS_OBJECT_MANAGER (priv->manager));
+	for (iter = exported; iter; iter = iter->next) {
+		nm_bus_manager_unregister_object (self, iter->data);
+		g_object_unref (iter->data);
+	}
+	g_list_free (exported);
+	g_clear_object (&priv->manager);
 
 	if (priv->reconnect_id) {
 		g_source_remove (priv->reconnect_id);
@@ -586,9 +656,8 @@ nm_bus_manager_class_init (NMBusManagerClass *klass)
 		g_signal_new (NM_BUS_MANAGER_PRIVATE_CONNECTION_NEW,
 		              G_OBJECT_CLASS_TYPE (object_class),
 		              G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
-		              G_STRUCT_OFFSET (NMBusManagerClass, private_connection_new),
-		              NULL, NULL, NULL,
-		              G_TYPE_NONE, 1, G_TYPE_POINTER);
+		              0, NULL, NULL, NULL,
+		              G_TYPE_NONE, 2, G_TYPE_DBUS_CONNECTION, G_TYPE_DBUS_OBJECT_MANAGER_SERVER);
 
 	signals[PRIVATE_CONNECTION_DISCONNECTED] =
 		g_signal_new (NM_BUS_MANAGER_PRIVATE_CONNECTION_DISCONNECTED,
@@ -614,6 +683,7 @@ nm_bus_manager_cleanup (NMBusManager *self)
 		g_clear_object (&priv->connection);
 	}
 
+	g_dbus_object_manager_server_set_connection (priv->manager, NULL);
 	priv->started = FALSE;
 }
 
@@ -715,6 +785,7 @@ nm_bus_manager_init_bus (NMBusManager *self)
 		return FALSE;
 	}
 
+	g_dbus_object_manager_server_set_connection (priv->manager, priv->connection);
 	return TRUE;
 }
 
@@ -777,41 +848,21 @@ nm_bus_manager_get_connection (NMBusManager *self)
 	return NM_BUS_MANAGER_GET_PRIVATE (self)->connection;
 }
 
-static void
-object_destroyed (NMBusManager *self, gpointer object)
-{
-	g_hash_table_remove (NM_BUS_MANAGER_GET_PRIVATE (self)->exported, object);
-}
-
 void
 nm_bus_manager_register_object (NMBusManager *self,
                                 const char *path,
-                                gpointer object)
+                                GDBusObjectSkeleton *object)
 {
 	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);
-	GHashTableIter iter;
-	GDBusConnection *connection;
 
-	g_assert (G_IS_DBUS_INTERFACE_SKELETON (object));
+	g_assert (G_IS_DBUS_OBJECT_SKELETON (object));
 
-	if (g_hash_table_lookup (priv->exported, G_OBJECT (object)))
+	if (g_dbus_object_manager_server_is_exported (priv->manager, object))
 		g_return_if_reached ();
 
-	g_hash_table_insert (priv->exported, G_OBJECT (object), g_strdup (path));
-	g_object_weak_ref (G_OBJECT (object), (GWeakNotify) object_destroyed, self);
-
-	if (priv->connection) {
-		g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (object),
-		                                  priv->connection, path, NULL);
-	}
-
-	if (priv->priv_server) {
-		g_hash_table_iter_init (&iter, priv->priv_server->connections);
-		while (g_hash_table_iter_next (&iter, (gpointer) &connection, NULL)) {
-			g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (object),
-			                                  connection, path, NULL);
-		}
-	}
+	g_dbus_object_manager_server_export (priv->manager, object);
+	if (priv->priv_server)
+		private_server_register_object (priv->priv_server, object);
 }
 
 gpointer
@@ -819,32 +870,29 @@ nm_bus_manager_get_registered_object (NMBusManager *self,
                                       const char *path)
 {
 	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);
-	GHashTableIter iter;
-	GObject *object;
-	const char *export_path;
 
-	g_hash_table_iter_init (&iter, priv->exported);
-	while (g_hash_table_iter_next (&iter, (gpointer *) &object, (gpointer *) &export_path)) {
-		if (!strcmp (path, export_path))
-			return object;
-	}
-	return NULL;
+	return g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (priv->manager), path);
 }
 
 void
-nm_bus_manager_unregister_object (NMBusManager *self, gpointer object)
+nm_bus_manager_unregister_object (NMBusManager *self, GDBusObjectSkeleton *object)
 {
 	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);
+	gs_free char *path = NULL;
 
-	g_assert (G_IS_DBUS_INTERFACE_SKELETON (object));
+	g_assert (G_IS_DBUS_OBJECT_SKELETON (object));
 
-	if (!g_hash_table_lookup (priv->exported, G_OBJECT (object)))
+	if (!g_dbus_object_manager_server_is_exported (priv->manager, object))
 		g_return_if_reached ();
 
-	g_hash_table_remove (priv->exported, G_OBJECT (object));
-	g_object_weak_unref (G_OBJECT (object), (GWeakNotify) object_destroyed, self);
+	g_object_get (G_OBJECT (object), "g-object-path", &path, NULL);
+	g_return_if_fail (path != NULL);
 
-	g_dbus_interface_skeleton_unexport (G_DBUS_INTERFACE_SKELETON (object));
+	g_dbus_object_manager_server_unexport (priv->manager, path);
+	if (priv->priv_server)
+		private_server_unregister_object (priv->priv_server, path);
+
+	g_dbus_object_skeleton_set_object_path (object, NULL);
 }
 
 /**

@@ -31,7 +31,7 @@ static GHashTable *prefix_counters;
 static gboolean quitting = FALSE;
 
 
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (NMExportedObject, nm_exported_object, G_TYPE_OBJECT,
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (NMExportedObject, nm_exported_object, G_TYPE_DBUS_OBJECT_SKELETON,
                                   prefix_counters = g_hash_table_new (g_str_hash, g_str_equal);
                                   )
 
@@ -457,6 +457,8 @@ nm_exported_object_export (NMExportedObject *self)
 	} else
 		priv->path = g_strdup (class_export_path);
 
+	g_dbus_object_skeleton_set_object_path (G_DBUS_OBJECT_SKELETON (self), priv->path);
+
 	type = G_OBJECT_TYPE (self);
 	while (type != NM_TYPE_EXPORTED_OBJECT) {
 		nm_exported_object_create_skeletons (self, type);
@@ -464,7 +466,8 @@ nm_exported_object_export (NMExportedObject *self)
 	}
 
 	for (iter = priv->interfaces; iter; iter = iter->next)
-		nm_bus_manager_register_object (dbus_manager, priv->path, iter->data);
+		g_dbus_object_skeleton_add_interface (G_DBUS_OBJECT_SKELETON (self), iter->data);
+	nm_bus_manager_register_object (dbus_manager, priv->path, G_DBUS_OBJECT_SKELETON (self));
 
 	return priv->path;
 }
@@ -519,12 +522,14 @@ nm_exported_object_unexport (NMExportedObject *self)
 
 	g_return_if_fail (priv->path != NULL);
 
-	g_clear_pointer (&priv->path, g_free);
-
 	for (iter = priv->interfaces; iter; iter = iter->next)
-		nm_bus_manager_unregister_object (nm_bus_manager_get (), iter->data);
+		g_dbus_object_skeleton_remove_interface (G_DBUS_OBJECT_SKELETON (self), iter->data);
 	g_slist_free_full (priv->interfaces, g_object_unref);
 	priv->interfaces = NULL;
+	nm_bus_manager_unregister_object (nm_bus_manager_get (), G_DBUS_OBJECT_SKELETON (self));
+
+	g_clear_pointer (&priv->path, g_free);
+	g_dbus_object_skeleton_set_object_path (G_DBUS_OBJECT_SKELETON (self), NULL);
 }
 
 static void

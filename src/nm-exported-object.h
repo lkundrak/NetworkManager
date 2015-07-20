@@ -34,11 +34,11 @@ G_BEGIN_DECLS
 #define NM_EXPORTED_OBJECT_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),  NM_TYPE_EXPORTED_OBJECT, NMExportedObjectClass))
 
 typedef struct {
-	GObject parent;
+	GDBusObjectSkeleton parent;
 } NMExportedObject;
 
 typedef struct {
-	GObjectClass parent;
+	GDBusObjectSkeletonClass parent;
 
 	const char *export_path;
 } NMExportedObjectClass;
