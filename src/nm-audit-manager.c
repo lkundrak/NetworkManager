@@ -84,7 +84,7 @@ audit_field_init_uint (AuditField *field, const char *name, uint val,
 }
 
 static char *
-build_message (GPtrArray *fields, int backend)
+build_message (GPtrArray *fields, AuditBackend backend)
 {
 	GString *string;
 	AuditField *field;
