@@ -529,8 +529,8 @@ ppp_stage3_ip_config_start (NMModem *self,
 		            error && error->message ? error->message : "(unknown)");
 		g_error_free (error);
 
-		g_object_unref (priv->ppp_manager);
-		priv->ppp_manager = NULL;
+		nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ppp_manager));
+		g_clear_object (&priv->ppp_manager);
 
 		*reason = NM_DEVICE_STATE_REASON_PPP_START_FAILED;
 		ret = NM_ACT_STAGE_RETURN_FAILURE;
@@ -897,8 +897,8 @@ deactivate_cleanup (NMModem *self, NMDevice *device)
 	priv->in_bytes = priv->out_bytes = 0;
 
 	if (priv->ppp_manager) {
-		g_object_unref (priv->ppp_manager);
-		priv->ppp_manager = NULL;
+		nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ppp_manager));
+		g_clear_object (&priv->ppp_manager);
 	}
 
 	if (device) {

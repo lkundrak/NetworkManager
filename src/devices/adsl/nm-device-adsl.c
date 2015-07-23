@@ -441,8 +441,8 @@ act_stage3_ip4_config_start (NMDevice *device,
 		_LOGW (LOGD_ADSL, "PPP failed to start: %s", err->message);
 		g_error_free (err);
 
-		g_object_unref (priv->ppp_manager);
-		priv->ppp_manager = NULL;
+		nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ppp_manager));
+		g_clear_object (&priv->ppp_manager);
 
 		*reason = NM_DEVICE_STATE_REASON_PPP_START_FAILED;
 	}
@@ -457,8 +457,8 @@ deactivate (NMDevice *device)
 	NMDeviceAdslPrivate *priv = NM_DEVICE_ADSL_GET_PRIVATE (self);
 
 	if (priv->ppp_manager) {
-		g_object_unref (priv->ppp_manager);
-		priv->ppp_manager = NULL;
+		nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ppp_manager));
+		g_clear_object (&priv->ppp_manager);
 	}
 
 	g_signal_handlers_disconnect_by_func (nm_platform_get (), G_CALLBACK (link_changed_cb), device);

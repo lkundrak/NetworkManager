@@ -50,6 +50,7 @@
 #include "nm-settings.h"
 #include "nm-auth-manager.h"
 #include "nm-core-internal.h"
+#include "nm-exported-object.h"
 
 #if !defined(NM_DIST_VERSION)
 # define NM_DIST_VERSION VERSION
@@ -459,8 +460,10 @@ main (int argc, char *argv[])
 
 	success = TRUE;
 
-	if (configure_and_quit == FALSE)
+	if (configure_and_quit == FALSE) {
 		g_main_loop_run (main_loop);
+		nm_exported_object_class_set_quitting ();
+	}
 
 	nm_manager_stop (manager);
 

@@ -217,6 +217,7 @@ active_connection_remove (NMManager *self, NMActiveConnection *active)
 		else
 			connection = NULL;
 
+		nm_exported_object_unexport (NM_EXPORTED_OBJECT (active));
 		g_object_unref (active);
 
 		if (   connection

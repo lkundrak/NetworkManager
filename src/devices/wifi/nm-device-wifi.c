@@ -453,6 +453,9 @@ emit_ap_added_removed (NMDeviceWifi *self,
 {
 	g_signal_emit (self, signals[signum], 0, ap);
 	g_object_notify (G_OBJECT (self), NM_DEVICE_WIFI_ACCESS_POINTS);
+	if (signum == ACCESS_POINT_REMOVED)
+		nm_exported_object_unexport (NM_EXPORTED_OBJECT (ap));
+
 	nm_device_emit_recheck_auto_activate (NM_DEVICE (self));
 	if (recheck_available_connections)
 		nm_device_recheck_available_connections (NM_DEVICE (self));

@@ -28,6 +28,8 @@
 #include "nm-default.h"
 
 static GHashTable *prefix_counters;
+static gboolean quitting = FALSE;
+
 
 G_DEFINE_ABSTRACT_TYPE_WITH_CODE (NMExportedObject, nm_exported_object, G_TYPE_OBJECT,
                                   prefix_counters = g_hash_table_new (g_str_hash, g_str_equal);
@@ -640,8 +642,15 @@ nm_exported_object_dispose (GObject *object)
 {
 	NMExportedObjectPrivate *priv = NM_EXPORTED_OBJECT_GET_PRIVATE (object);
 
-	if (priv->path)
-		nm_exported_object_unexport (NM_EXPORTED_OBJECT (object));
+	/* Objects should have already been unexported by their owner, unless
+	 * we are quitting, where many objects stick around until exit.
+	 */
+	if (!quitting) {
+		g_warn_if_fail (priv->path == NULL);
+		if (priv->path)
+			nm_exported_object_unexport (NM_EXPORTED_OBJECT (object));
+	}
+	g_clear_pointer (&priv->path, g_free);
 
 	g_variant_builder_clear (&priv->pending_notifies);
 	nm_clear_g_source (&priv->notify_idle_id);
@@ -662,3 +671,10 @@ nm_exported_object_class_init (NMExportedObjectClass *klass)
 	object_class->notify = nm_exported_object_notify;
 	object_class->dispose = nm_exported_object_dispose;
 }
+
+void
+nm_exported_object_class_set_quitting (void)
+{
+	quitting = TRUE;
+}
+

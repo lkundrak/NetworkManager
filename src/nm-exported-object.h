@@ -45,6 +45,8 @@ typedef struct {
 
 GType nm_exported_object_get_type (void);
 
+void nm_exported_object_class_set_quitting  (void);
+
 void nm_exported_object_class_add_interface (NMExportedObjectClass *object_class,
                                              GType                  dbus_skeleton_type,
                                              ...) G_GNUC_NULL_TERMINATED;
