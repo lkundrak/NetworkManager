@@ -63,13 +63,13 @@ typedef struct {
 
 GType nm_audit_manager_get_type (void);
 NMAuditManager *nm_audit_manager_get (void);
-gboolean nm_audit_manager_audit_enabled (NMAuditManager *self, gboolean result);
+gboolean nm_audit_manager_audit_enabled (NMAuditManager *self);
 
 #define nm_audit_log_connection_op(op, connection, result, subject, reason) \
 	G_STMT_START { \
 		NMAuditManager *_audit = nm_audit_manager_get (); \
 		\
-		if (nm_audit_manager_audit_enabled (_audit, result)) { \
+		if (nm_audit_manager_audit_enabled (_audit)) { \
 			_nm_audit_manager_log_connection_op (_audit, __FILE__, __LINE__, G_STRFUNC, \
 			                                     (op), (connection), (result), (subject), \
 			                                     (reason)); \
@@ -80,7 +80,7 @@ gboolean nm_audit_manager_audit_enabled (NMAuditManager *self, gboolean result);
 	G_STMT_START { \
 		NMAuditManager *_audit = nm_audit_manager_get (); \
 		\
-		if (nm_audit_manager_audit_enabled (_audit, result)) { \
+		if (nm_audit_manager_audit_enabled (_audit)) { \
 			_nm_audit_manager_log_control_op (_audit, __FILE__, __LINE__, G_STRFUNC, \
 			                                  (op), (arg), (result), (subject), (reason)); \
 		} \
@@ -90,7 +90,7 @@ gboolean nm_audit_manager_audit_enabled (NMAuditManager *self, gboolean result);
 	G_STMT_START { \
 		NMAuditManager *_audit = nm_audit_manager_get (); \
 		\
-		if (nm_audit_manager_audit_enabled (_audit, result)) { \
+		if (nm_audit_manager_audit_enabled (_audit)) { \
 			_nm_audit_manager_log_device_op (_audit, __FILE__, __LINE__, G_STRFUNC, \
 			                                 (op), (device), (result), (subject), (reason)); \
 		} \

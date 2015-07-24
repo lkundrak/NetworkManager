@@ -34,8 +34,7 @@
 #include "nm-logging.h"
 #include "nm-macros-internal.h"
 
-#define AUDIT_LOGL_SUCCESS     LOGL_INFO
-#define AUDIT_LOGL_FAIL        LOGL_ERR
+#define AUDIT_LOG_LEVEL LOGL_INFO
 
 typedef enum {
        BACKEND_LOG    = (1 << 0),
@@ -138,7 +137,6 @@ nm_audit_log (NMAuditManager *self, GPtrArray *fields, const char *file,
               guint line, const char *func, gboolean success)
 {
 	NMAuditManagerPrivate *priv;
-	NMLogLevel log_level;
 	char *msg;
 
 	g_return_if_fail (NM_IS_AUDIT_MANAGER (self));
@@ -153,10 +151,9 @@ nm_audit_log (NMAuditManager *self, GPtrArray *fields, const char *file,
 	}
 #endif
 
-	log_level = success ? AUDIT_LOGL_SUCCESS : AUDIT_LOGL_FAIL;
-	if (nm_logging_enabled (log_level, LOGD_AUDIT)) {
+	if (nm_logging_enabled (AUDIT_LOG_LEVEL, LOGD_AUDIT)) {
 		msg = build_message (fields, BACKEND_LOG);
-		_nm_log_impl (file, line, func, log_level, LOGD_AUDIT, 0, "%s", msg);
+		_nm_log_impl (file, line, func, AUDIT_LOG_LEVEL, LOGD_AUDIT, 0, "%s", msg);
 		g_free (msg);
 	}
 }
@@ -199,7 +196,7 @@ _audit_log_helper (NMAuditManager *self, GPtrArray *fields, const char *file,
 }
 
 gboolean
-nm_audit_manager_audit_enabled (NMAuditManager *self, gboolean result)
+nm_audit_manager_audit_enabled (NMAuditManager *self)
 {
 #if HAVE_LIBAUDIT
 	NMAuditManagerPrivate *priv = NM_AUDIT_MANAGER_GET_PRIVATE (self);
@@ -208,8 +205,7 @@ nm_audit_manager_audit_enabled (NMAuditManager *self, gboolean result)
 		return TRUE;
 #endif
 
-	return nm_logging_enabled (result ? AUDIT_LOGL_SUCCESS : AUDIT_LOGL_FAIL,
-	                           LOGD_AUDIT);
+	return nm_logging_enabled (AUDIT_LOG_LEVEL, LOGD_AUDIT);
 }
 
 void
