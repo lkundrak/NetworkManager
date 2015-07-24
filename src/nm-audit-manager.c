@@ -52,8 +52,10 @@ typedef struct {
 } AuditField;
 
 typedef struct {
+#if HAVE_LIBAUDIT
 	NMConfig *config;
 	int auditd_fd;
+#endif
 } NMAuditManagerPrivate;
 
 #define NM_AUDIT_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_AUDIT_MANAGER, NMAuditManagerPrivate))
@@ -284,10 +286,10 @@ _nm_audit_manager_log_device_op (NMAuditManager *self, const char *file, guint l
 	audit_log_helper (self, fields, file, line, func, op, result, subject, reason);
 }
 
+#if HAVE_LIBAUDIT
 static void
 init_auditd (NMAuditManager *self)
 {
-#if HAVE_LIBAUDIT
 	NMAuditManagerPrivate *priv = NM_AUDIT_MANAGER_GET_PRIVATE (self);
 	NMConfigData *data = nm_config_get_data (priv->config);
 
@@ -308,7 +310,6 @@ init_auditd (NMAuditManager *self)
 			nm_log_dbg (LOGD_AUDIT, "audit socket closed");
 		}
 	}
-#endif
 }
 
 static void
@@ -321,10 +322,12 @@ config_changed_cb (NMConfig *config,
 	if (NM_FLAGS_HAS (changes, NM_CONFIG_CHANGE_VALUES))
 		init_auditd (self);
 }
+#endif
 
 static void
 nm_audit_manager_init (NMAuditManager *self)
 {
+#if HAVE_LIBAUDIT
 	NMAuditManagerPrivate *priv = NM_AUDIT_MANAGER_GET_PRIVATE (self);
 
 	priv->config = g_object_ref (nm_config_get ());
@@ -335,11 +338,13 @@ nm_audit_manager_init (NMAuditManager *self)
 	priv->auditd_fd = -1;
 
 	init_auditd (self);
+#endif
 }
 
 static void
 dispose (GObject *object)
 {
+#if HAVE_LIBAUDIT
 	NMAuditManager *self = NM_AUDIT_MANAGER (object);
 	NMAuditManagerPrivate *priv = NM_AUDIT_MANAGER_GET_PRIVATE (self);
 
@@ -347,6 +352,7 @@ dispose (GObject *object)
 		g_signal_handlers_disconnect_by_func (priv->config, config_changed_cb, self);
 		g_clear_object (&priv->config);
 	}
+#endif
 
 	G_OBJECT_CLASS (nm_audit_manager_parent_class)->dispose (object);
 }
