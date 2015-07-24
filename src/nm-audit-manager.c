@@ -298,16 +298,16 @@ init_auditd (NMAuditManager *self)
 		if (priv->auditd_fd < 0) {
 			priv->auditd_fd = audit_open ();
 			if (priv->auditd_fd < 0) {
-				nm_log_err (LOGD_AUDIT, "failed to open auditd socket: %s",
+				nm_log_err (LOGD_CORE, "failed to open auditd socket: %s",
 				            strerror (errno));
 			} else
-				nm_log_dbg (LOGD_AUDIT, "audit socket created");
+				nm_log_dbg (LOGD_CORE, "audit socket created");
 		}
 	} else {
 		if (priv->auditd_fd >= 0) {
 			audit_close (priv->auditd_fd);
 			priv->auditd_fd = -1;
-			nm_log_dbg (LOGD_AUDIT, "audit socket closed");
+			nm_log_dbg (LOGD_CORE, "audit socket closed");
 		}
 	}
 }
