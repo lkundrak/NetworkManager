@@ -56,7 +56,6 @@ G_BEGIN_DECLS
 #define NM_CONFIG_KEYFILE_GROUP_MAIN                        "main"
 #define NM_CONFIG_KEYFILE_GROUP_LOGGING                     "logging"
 #define NM_CONFIG_KEYFILE_GROUP_CONNECTIVITY                "connectivity"
-#define NM_CONFIG_KEYFILE_GROUP_AUDIT                       "audit"
 
 #define NM_CONFIG_KEYFILE_GROUP_KEYFILE                     "keyfile"
 #define NM_CONFIG_KEYFILE_GROUP_IFUPDOWN                    "ifupdown"
@@ -67,7 +66,7 @@ G_BEGIN_DECLS
 #define NM_CONFIG_KEYFILE_KEY_IFNET_AUTO_REFRESH            "auto_refresh"
 #define NM_CONFIG_KEYFILE_KEY_IFNET_MANAGED                 "managed"
 #define NM_CONFIG_KEYFILE_KEY_IFUPDOWN_MANAGED              "managed"
-#define NM_CONFIG_KEYFILE_KEY_ENABLE_AUDITD                 "enable-auditd"
+#define NM_CONFIG_KEYFILE_KEY_AUDIT                         "audit"
 
 #define NM_CONFIG_KEYFILE_KEYPREFIX_WAS                     ".was."
 #define NM_CONFIG_KEYFILE_KEYPREFIX_SET                     ".set."
