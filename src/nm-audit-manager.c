@@ -65,8 +65,8 @@ G_DEFINE_TYPE (NMAuditManager, nm_audit_manager, G_TYPE_OBJECT)
 NM_DEFINE_SINGLETON_GETTER (NMAuditManager, nm_audit_manager_get, NM_TYPE_AUDIT_MANAGER);
 
 static void
-audit_field_init_string (AuditField *field, const char *name, const char *str,
-                         gboolean need_encoding, AuditBackend backends)
+_audit_field_init_string (AuditField *field, const char *name, const char *str,
+                          gboolean need_encoding, AuditBackend backends)
 {
 	field->name = name;
 	field->need_encoding = need_encoding;
@@ -76,8 +76,8 @@ audit_field_init_string (AuditField *field, const char *name, const char *str,
 }
 
 static void
-audit_field_init_uint (AuditField *field, const char *name, uint val,
-                       AuditBackend backends)
+_audit_field_init_uint (AuditField *field, const char *name, uint val,
+                        AuditBackend backends)
 {
 	field->name = name;
 	field->backends = backends;
@@ -162,36 +162,36 @@ nm_audit_log (NMAuditManager *self, GPtrArray *fields, const char *file,
 }
 
 static void
-audit_log_helper (NMAuditManager *self, GPtrArray *fields, const char *file,
-                  guint line, const char *func, const char *op, gboolean result,
-                  NMAuthSubject *subject, const char *reason)
+_audit_log_helper (NMAuditManager *self, GPtrArray *fields, const char *file,
+                   guint line, const char *func, const char *op, gboolean result,
+                   NMAuthSubject *subject, const char *reason)
 {
 	AuditField op_field = { }, pid_field = { }, uid_field = { };
 	AuditField result_field = { }, reason_field = { };
 	gulong pid, uid;
 
-	audit_field_init_string (&op_field, "op", op, FALSE, BACKEND_ALL);
+	_audit_field_init_string (&op_field, "op", op, FALSE, BACKEND_ALL);
 	g_ptr_array_insert (fields, 0, &op_field);
 
 	if (subject && nm_auth_subject_is_unix_process (subject)) {
 		pid = nm_auth_subject_get_unix_process_pid (subject);
 		uid = nm_auth_subject_get_unix_process_uid (subject);
 		if (pid != G_MAXULONG) {
-			audit_field_init_uint (&pid_field, "pid", pid, BACKEND_ALL);
+			_audit_field_init_uint (&pid_field, "pid", pid, BACKEND_ALL);
 			g_ptr_array_add (fields, &pid_field);
 		}
 		if (uid != G_MAXULONG) {
-			audit_field_init_uint (&uid_field, "uid", uid, BACKEND_ALL);
+			_audit_field_init_uint (&uid_field, "uid", uid, BACKEND_ALL);
 			g_ptr_array_add (fields, &uid_field);
 		}
 	}
 
-	audit_field_init_string (&result_field, "result", result ? "success" : "fail",
-	                         FALSE, BACKEND_ALL);
+	_audit_field_init_string (&result_field, "result", result ? "success" : "fail",
+	                          FALSE, BACKEND_ALL);
 	g_ptr_array_add (fields, &result_field);
 
 	if (reason) {
-		audit_field_init_string (&reason_field, "reason", reason, FALSE, BACKEND_LOG);
+		_audit_field_init_string (&reason_field, "reason", reason, FALSE, BACKEND_LOG);
 		g_ptr_array_add (fields, &reason_field);
 	}
 
@@ -226,16 +226,16 @@ _nm_audit_manager_log_connection_op (NMAuditManager *self, const char *file, gui
 	fields = g_ptr_array_new ();
 
 	if (connection) {
-		audit_field_init_string (&uuid_field, "uuid", nm_connection_get_uuid (connection),
-		                         FALSE, BACKEND_ALL);
+		_audit_field_init_string (&uuid_field, "uuid", nm_connection_get_uuid (connection),
+		                          FALSE, BACKEND_ALL);
 		g_ptr_array_add (fields, &uuid_field);
 
-		audit_field_init_string (&name_field, "name", nm_connection_get_id (connection),
-		                         TRUE, BACKEND_ALL);
+		_audit_field_init_string (&name_field, "name", nm_connection_get_id (connection),
+		                          TRUE, BACKEND_ALL);
 		g_ptr_array_add (fields, &name_field);
 	}
 
-	audit_log_helper (self, fields, file, line, func, op, result, subject, reason);
+	_audit_log_helper (self, fields, file, line, func, op, result, subject, reason);
 }
 
 void
@@ -252,10 +252,10 @@ _nm_audit_manager_log_control_op (NMAuditManager *self, const char *file, guint 
 
 	fields = g_ptr_array_new ();
 
-	audit_field_init_string (&arg_field, "arg", arg, TRUE, BACKEND_ALL);
+	_audit_field_init_string (&arg_field, "arg", arg, TRUE, BACKEND_ALL);
 	g_ptr_array_add (fields, &arg_field);
 
-	audit_log_helper (self, fields, file, line, func, op, result, subject, reason);
+	_audit_log_helper (self, fields, file, line, func, op, result, subject, reason);
 }
 
 void
@@ -273,17 +273,17 @@ _nm_audit_manager_log_device_op (NMAuditManager *self, const char *file, guint l
 
 	fields = g_ptr_array_new ();
 
-	audit_field_init_string (&interface_field, "interface", nm_device_get_ip_iface (device),
-	                         TRUE, BACKEND_ALL);
+	_audit_field_init_string (&interface_field, "interface", nm_device_get_ip_iface (device),
+	                          TRUE, BACKEND_ALL);
 	g_ptr_array_add (fields, &interface_field);
 
 	ifindex = nm_device_get_ip_ifindex (device);
 	if (ifindex > 0) {
-		audit_field_init_uint (&ifindex_field, "ifindex", ifindex, BACKEND_ALL);
+		_audit_field_init_uint (&ifindex_field, "ifindex", ifindex, BACKEND_ALL);
 		g_ptr_array_add (fields, &ifindex_field);
 	}
 
-	audit_log_helper (self, fields, file, line, func, op, result, subject, reason);
+	_audit_log_helper (self, fields, file, line, func, op, result, subject, reason);
 }
 
 #if HAVE_LIBAUDIT
