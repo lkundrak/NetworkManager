@@ -617,29 +617,7 @@ find_scripts (const char *str_action)
 static gboolean
 script_must_wait (const char *path)
 {
-	gs_free char *link = NULL;
-	gs_free char *dir = NULL;
-	gs_free char *real = NULL;
-	char *tmp;
-
-	link = g_file_read_link (path, NULL);
-	if (link) {
-		if (!g_path_is_absolute (link)) {
-			dir = g_path_get_dirname (path);
-			tmp = g_build_path ("/", dir, link, NULL);
-			g_free (link);
-			g_free (dir);
-			link = tmp;
-		}
-
-		dir = g_path_get_dirname (link);
-		real = realpath (dir, NULL);
-
-		if (real && !strcmp (real, NMD_SCRIPT_DIR_NO_WAIT))
-			return FALSE;
-	}
-
-	return TRUE;
+	return !g_str_has_suffix (path, ".no-wait");
 }
 
 static gboolean
