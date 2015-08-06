@@ -48,6 +48,9 @@ ethtool_get (const char *name, gpointer edata)
 	if (!name || !*name)
 		return FALSE;
 
+	if (!nmp_utils_device_exists (name))
+		return FALSE;
+
 	if (strlen (name) >= IFNAMSIZ)
 		g_return_val_if_reached (FALSE);
 
@@ -310,6 +313,9 @@ nmp_utils_mii_supports_carrier_detect (const char *ifname)
 	if (!ifname)
 		return FALSE;
 
+	if (!nmp_utils_device_exists (ifname))
+		return FALSE;
+
 	fd = socket (PF_INET, SOCK_DGRAM, 0);
 	if (fd < 0) {
 		nm_log_err (LOGD_PLATFORM, "mii: couldn't open control socket (%s)", ifname);
@@ -473,4 +479,11 @@ nmp_utils_lifetime_get (guint32 timestamp,
 	return TRUE;
 }
 
+gboolean
+nmp_utils_device_exists (const char *name)
+{
+	gs_free char *sysdir;
 
+	sysdir = g_strdup_printf ("/sys/class/net/%s", name);
+	return g_file_test (sysdir, G_FILE_TEST_EXISTS);
+}
