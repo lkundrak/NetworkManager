@@ -51,8 +51,8 @@ ethtool_get (const char *name, gpointer edata)
 	if (!nmp_utils_device_exists (name))
 		return FALSE;
 
-	if (strlen (name) >= IFNAMSIZ)
-		g_return_val_if_reached (FALSE);
+	/* nmp_utils_device_exists() already errors out if @name is invalid. */
+	nm_assert (strlen (name) < IFNAMSIZ);
 
 	memset (&ifr, 0, sizeof (ifr));
 	strcpy (ifr.ifr_name, name);
@@ -482,8 +482,14 @@ nmp_utils_lifetime_get (guint32 timestamp,
 gboolean
 nmp_utils_device_exists (const char *name)
 {
-	gs_free char *sysdir;
+#define SYS_CLASS_NET "/sys/class/net/"
+	char sysdir[STRLEN (SYS_CLASS_NET) + IFNAMSIZ] = SYS_CLASS_NET;
 
-	sysdir = g_strdup_printf ("/sys/class/net/%s", name);
+	if (   !name
+	    || strlen (name) >= IFNAMSIZ
+	    || !nm_utils_is_valid_path_component (name))
+		g_return_val_if_reached (FALSE);
+
+	strcpy (&sysdir[STRLEN (SYS_CLASS_NET)], name);
 	return g_file_test (sysdir, G_FILE_TEST_EXISTS);
 }
