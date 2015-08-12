@@ -274,4 +274,9 @@ _g_key_file_save_to_file (GKeyFile     *key_file,
 #endif
 
 
+#if !GLIB_CHECK_VERSION (2, 44, 0)
+#define G_IO_ERROR_NOT_CONNECTED ((GIOErrorEnum) 45)
+#endif
+
+
 #endif  /* __NM_GLIB_H__ */
