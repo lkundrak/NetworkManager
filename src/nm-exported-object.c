@@ -651,11 +651,12 @@ nm_exported_object_dispose (GObject *object)
 	 * we are quitting, where many objects stick around until exit.
 	 */
 	if (!quitting) {
-		g_warn_if_fail (priv->path == NULL);
-		if (priv->path)
+		if (priv->path) {
+			g_warn_if_reached ();
 			nm_exported_object_unexport (NM_EXPORTED_OBJECT (object));
-	}
-	g_clear_pointer (&priv->path, g_free);
+		}
+	} else
+		g_clear_pointer (&priv->path, g_free);
 
 	g_variant_builder_clear (&priv->pending_notifies);
 	nm_clear_g_source (&priv->notify_idle_id);
