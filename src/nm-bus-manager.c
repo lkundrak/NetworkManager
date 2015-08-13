@@ -842,7 +842,6 @@ nm_bus_manager_get_connection (NMBusManager *self)
 
 void
 nm_bus_manager_register_object (NMBusManager *self,
-                                const char *path,
                                 GDBusObjectSkeleton *object)
 {
 	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);

@@ -467,7 +467,7 @@ nm_exported_object_export (NMExportedObject *self)
 
 	for (iter = priv->interfaces; iter; iter = iter->next)
 		g_dbus_object_skeleton_add_interface (G_DBUS_OBJECT_SKELETON (self), iter->data);
-	nm_bus_manager_register_object (dbus_manager, priv->path, G_DBUS_OBJECT_SKELETON (self));
+	nm_bus_manager_register_object (dbus_manager, G_DBUS_OBJECT_SKELETON (self));
 
 	return priv->path;
 }
