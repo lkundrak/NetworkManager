@@ -460,10 +460,10 @@ main (int argc, char *argv[])
 
 	success = TRUE;
 
-	if (configure_and_quit == FALSE) {
+	if (configure_and_quit == FALSE)
 		g_main_loop_run (main_loop);
-		nm_exported_object_class_set_quitting ();
-	}
+
+	nm_exported_object_class_set_quitting ();
 
 	nm_manager_stop (manager);
 
