@@ -35,8 +35,6 @@
 #include <string.h>
 #include "NetworkManagerUtils.h"
 
-#include "gsystem-local-alloc.h"
-
 #define PRIV_SOCK_PATH NMRUNDIR "/private"
 #define PRIV_SOCK_TAG  "private"
 
