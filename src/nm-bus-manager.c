@@ -567,9 +567,11 @@ manager_private_connection_new (NMBusManager *self,
 }
 
 static void
-manager_private_server_setup (NMBusManager *self)
+nm_bus_manager_init (NMBusManager *self)
 {
 	NMBusManagerPrivate *priv = NM_BUS_MANAGER_GET_PRIVATE (self);
+
+	priv->manager = g_dbus_object_manager_server_new (OBJECT_MANAGER_SERVER_BASE_PATH);
 
 	/* Skip this step if this is just a test program */
 	if (nm_utils_get_testing ())
@@ -588,14 +590,6 @@ manager_private_server_setup (NMBusManager *self)
 		                  (GCallback) manager_private_connection_new,
 		                  NULL);
 	}
-}
-
-static void
-nm_bus_manager_init (NMBusManager *self)
-{
-	NM_BUS_MANAGER_GET_PRIVATE (self)->manager = g_dbus_object_manager_server_new (OBJECT_MANAGER_SERVER_BASE_PATH);
-
-	manager_private_server_setup (self);
 }
 
 static void
