@@ -532,6 +532,28 @@ nm_exported_object_unexport (NMExportedObject *self)
 	g_dbus_object_skeleton_set_object_path (G_DBUS_OBJECT_SKELETON (self), NULL);
 }
 
+void
+_nm_exported_object_clear_and_unexport (NMExportedObject **location)
+{
+	NMExportedObject *self;
+	NMExportedObjectPrivate *priv;
+
+	if (!location || !*location)
+		return;
+
+	self = *location;
+	*location = NULL;
+
+	g_return_if_fail (NM_IS_EXPORTED_OBJECT (self));
+
+	priv = NM_EXPORTED_OBJECT_GET_PRIVATE (*location);
+
+	if (priv->path)
+		nm_exported_object_unexport (self);
+
+	g_object_unref (self);
+}
+
 static void
 nm_exported_object_init (NMExportedObject *self)
 {

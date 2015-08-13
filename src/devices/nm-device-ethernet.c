@@ -978,8 +978,7 @@ pppoe_stage3_ip4_config_start (NMDeviceEthernet *self, NMDeviceStateReason *reas
 		_LOGW (LOGD_DEVICE, "PPPoE failed to start: %s", err->message);
 		g_error_free (err);
 
-		nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ppp_manager));
-		g_clear_object (&priv->ppp_manager);
+		nm_exported_object_clear_and_unexport (&priv->ppp_manager);
 
 		*reason = NM_DEVICE_STATE_REASON_PPP_START_FAILED;
 	}
@@ -1360,10 +1359,7 @@ deactivate (NMDevice *device)
 		priv->pending_ip4_config = NULL;
 	}
 
-	if (priv->ppp_manager) {
-		nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ppp_manager));
-		g_clear_object (&priv->ppp_manager);
-	}
+	nm_exported_object_clear_and_unexport (&priv->ppp_manager);
 
 	supplicant_interface_release (self);
 

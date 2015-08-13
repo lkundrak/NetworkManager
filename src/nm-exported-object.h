@@ -55,6 +55,9 @@ const char *nm_exported_object_export      (NMExportedObject *self);
 const char *nm_exported_object_get_path    (NMExportedObject *self);
 gboolean    nm_exported_object_is_exported (NMExportedObject *self);
 void        nm_exported_object_unexport    (NMExportedObject *self);
+void        _nm_exported_object_clear_and_unexport (NMExportedObject **location);
+#define nm_exported_object_clear_and_unexport(location) _nm_exported_object_clear_and_unexport ((NMExportedObject **) (location))
+
 
 G_END_DECLS
 

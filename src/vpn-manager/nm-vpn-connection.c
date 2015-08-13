@@ -985,10 +985,8 @@ _cleanup_failed_config (NMVpnConnection *connection)
 {
 	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (connection);
 
-	nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ip4_config));
-	g_clear_object (&priv->ip4_config);
-	nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ip6_config));
-	g_clear_object (&priv->ip6_config);
+	nm_exported_object_clear_and_unexport (&priv->ip4_config);
+	nm_exported_object_clear_and_unexport (&priv->ip6_config);
 
 	nm_log_warn (LOGD_VPN, "VPN connection '%s' did not receive valid IP config information.",
 	             nm_connection_get_id (priv->connection));
@@ -1186,14 +1184,12 @@ nm_vpn_connection_config_get (NMVpnConnection *self, GVariant *dict)
 	priv->has_ip4 = FALSE;
 	if (g_variant_lookup (dict, NM_VPN_PLUGIN_CONFIG_HAS_IP4, "b", &b))
 		priv->has_ip4 = b;
-	nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ip4_config));
-	g_clear_object (&priv->ip4_config);
+	nm_exported_object_clear_and_unexport (&priv->ip4_config);
 
 	priv->has_ip6 = FALSE;
 	if (g_variant_lookup (dict, NM_VPN_PLUGIN_CONFIG_HAS_IP6, "b", &b))
 		priv->has_ip6 = b;
-	nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ip6_config));
-	g_clear_object (&priv->ip6_config);
+	nm_exported_object_clear_and_unexport (&priv->ip6_config);
 }
 
 guint32
@@ -1359,8 +1355,7 @@ nm_vpn_connection_ip4_config_get (NMVpnConnection *self, GVariant *dict)
 	                             nm_connection_get_setting_ip4_config (priv->connection),
 	                             route_metric);
 
-	nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ip4_config));
-	g_clear_object (&priv->ip4_config);
+	nm_exported_object_clear_and_unexport (&priv->ip4_config);
 	priv->ip4_config = config;
 	nm_exported_object_export (NM_EXPORTED_OBJECT (config));
 	g_object_notify (G_OBJECT (self), NM_ACTIVE_CONNECTION_IP4_CONFIG);
@@ -1497,8 +1492,7 @@ next:
 	                             nm_connection_get_setting_ip6_config (priv->connection),
 	                             route_metric);
 
-	nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ip6_config));
-	g_clear_object (&priv->ip6_config);
+	nm_exported_object_clear_and_unexport (&priv->ip6_config);
 	priv->ip6_config = config;
 	nm_exported_object_export (NM_EXPORTED_OBJECT (config));
 	g_object_notify (G_OBJECT (self), NM_ACTIVE_CONNECTION_IP6_CONFIG);
@@ -2236,10 +2230,8 @@ dispose (GObject *object)
 		g_cancellable_cancel (priv->cancellable);
 		g_clear_object (&priv->cancellable);
 	}
-	nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ip4_config));
-	g_clear_object (&priv->ip4_config);
-	nm_exported_object_unexport (NM_EXPORTED_OBJECT (priv->ip6_config));
-	g_clear_object (&priv->ip6_config);
+	nm_exported_object_clear_and_unexport (&priv->ip4_config);
+	nm_exported_object_clear_and_unexport (&priv->ip6_config);
 	g_clear_object (&priv->proxy);
 	g_clear_object (&priv->connection);
 
