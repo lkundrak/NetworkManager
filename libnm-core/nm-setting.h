@@ -55,6 +55,23 @@ G_BEGIN_DECLS
 #define NM_SETTING_NAME "name"
 
 /**
+ * NMSettingBoolean:
+ * @NM_SETTING_BOOLEAN_FALSE: the setting is %FALSE
+ * @NM_SETTING_BOOLEAN_TRUE: the setting is %TRUE
+ * @NM_SETTING_BOOLEAN_DEFAULT: the setting value is undefined, the default
+ * value must be used
+ *
+ * A more flexible boolean type which can represent missing/default values.
+ */
+typedef enum {
+	NM_SETTING_BOOLEAN_FALSE    = 0,
+	NM_SETTING_BOOLEAN_TRUE     = 1,
+	NM_SETTING_BOOLEAN_DEFAULT  = 2,
+
+	_NM_SETTING_BOOLEAN_LAST, /*< skip >*/
+} NMSettingBoolean;
+
+/**
  * NMSettingSecretFlags:
  * @NM_SETTING_SECRET_FLAG_NONE: the system is responsible for providing and
  * storing this secret (default)
