@@ -32,8 +32,8 @@
 
 int lldp_read_chassis_id(tlv_packet *tlv,
                          uint8_t *type,
-                         uint16_t *length,
-                         uint8_t **data) {
+                         uint8_t **data,
+                         uint16_t *length) {
         uint8_t subtype;
         int r;
 
@@ -71,8 +71,8 @@ int lldp_read_chassis_id(tlv_packet *tlv,
 
 int lldp_read_port_id(tlv_packet *tlv,
                       uint8_t *type,
-                      uint16_t *length,
-                      uint8_t **data) {
+                      uint8_t **data,
+                      uint16_t *length) {
         uint8_t subtype;
         char *s;
         int r;
@@ -139,8 +139,8 @@ int lldp_read_ttl(tlv_packet *tlv, uint16_t *ttl) {
 }
 
 int lldp_read_system_name(tlv_packet *tlv,
-                          uint16_t *length,
-                          char **data) {
+                          char **data,
+                          uint16_t *length) {
         char *s;
         int r;
 
@@ -163,8 +163,8 @@ int lldp_read_system_name(tlv_packet *tlv,
 }
 
 int lldp_read_system_description(tlv_packet *tlv,
-                                 uint16_t *length,
-                                 char **data) {
+                                 char **data,
+                                 uint16_t *length) {
         char *s;
         int r;
 
@@ -187,8 +187,8 @@ int lldp_read_system_description(tlv_packet *tlv,
 }
 
 int lldp_read_port_description(tlv_packet *tlv,
-                               uint16_t *length,
-                               char **data) {
+                               char **data,
+                               uint16_t *length) {
         char *s;
         int r;
 
@@ -246,7 +246,7 @@ int lldp_mib_update_objects(lldp_chassis *c, tlv_packet *tlv) {
         assert_return(c, -EINVAL);
         assert_return(tlv, -EINVAL);
 
-        r = lldp_read_port_id(tlv, &type, &length, &data);
+        r = lldp_read_port_id(tlv, &type, &data, &length);
         if (r < 0)
                 return r;
 
@@ -283,7 +283,7 @@ int lldp_mib_remove_objects(lldp_chassis *c, tlv_packet *tlv) {
         assert_return(c, -EINVAL);
         assert_return(tlv, -EINVAL);
 
-        r = lldp_read_port_id(tlv, &type, &length, &data);
+        r = lldp_read_port_id(tlv, &type, &data, &length);
         if (r < 0)
                 return r;
 
@@ -314,7 +314,7 @@ int lldp_mib_add_objects(Prioq *by_expiry,
         assert_return(neighbour_mib, -EINVAL);
         assert_return(tlv, -EINVAL);
 
-        r = lldp_read_chassis_id(tlv, &subtype, &length, &data);
+        r = lldp_read_chassis_id(tlv, &subtype, &data, &length);
         if (r < 0)
                 goto drop;
 
@@ -454,7 +454,7 @@ int lldp_neighbour_port_new(lldp_chassis *c,
 
         assert(tlv);
 
-        r = lldp_read_port_id(tlv, &type, &length, &data);
+        r = lldp_read_port_id(tlv, &type, &data, &length);
         if (r < 0)
                 return r;
 
@@ -507,7 +507,7 @@ int lldp_chassis_new(tlv_packet *tlv,
 
         assert(tlv);
 
-        r = lldp_read_chassis_id(tlv, &type, &length, &data);
+        r = lldp_read_chassis_id(tlv, &type, &data, &length);
         if (r < 0)
                 return r;
 
