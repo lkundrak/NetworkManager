@@ -2879,7 +2879,7 @@ static gboolean
 lldp_enabled (NMDevice *device, NMSettingConnection *s_con)
 {
 	NMSettingBoolean sb = NM_SETTING_BOOLEAN_DEFAULT;
-	char *value;
+	gs_free char *value = NULL;
 
 	if (s_con) {
 		sb = nm_setting_connection_get_enable_lldp (s_con);
