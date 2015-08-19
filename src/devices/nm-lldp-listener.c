@@ -595,6 +595,14 @@ nm_lldp_listener_new (void)
 }
 
 static void
+dispose (GObject *object)
+{
+	nm_lldp_listener_stop (NM_LLDP_LISTENER (object));
+
+	G_OBJECT_CLASS (nm_lldp_listener_parent_class)->dispose (object);
+}
+
+static void
 finalize (GObject *object)
 {
 	NMLldpListener *self = NM_LLDP_LISTENER (object);
@@ -613,6 +621,7 @@ nm_lldp_listener_class_init (NMLldpListenerClass *klass)
 
 	g_type_class_add_private (klass, sizeof (NMLldpListenerPrivate));
 
+	object_class->dispose = dispose;
 	object_class->finalize = finalize;
 	object_class->get_property = get_property;
 
