@@ -9272,10 +9272,10 @@ dispose (GObject *object)
 	nm_clear_g_source (&priv->device_ip_link_changed_id);
 
 	if (priv->lldp_listener) {
-		nm_lldp_listener_stop (priv->lldp_listener);
 		g_signal_handlers_disconnect_by_func (priv->lldp_listener,
 		                                      G_CALLBACK (lldp_neighbors_changed),
 		                                      self);
+		nm_lldp_listener_stop (priv->lldp_listener);
 		g_clear_object (&priv->lldp_listener);
 	}
 
