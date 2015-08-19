@@ -553,7 +553,8 @@ nm_lldp_listener_is_running (NMLldpListener *self)
 {
 	NMLldpListenerPrivate *priv;
 
-	g_return_if_fail (NM_IS_LLDP_LISTENER (self));
+	g_return_val_if_fail (NM_IS_LLDP_LISTENER (self), FALSE);
+
 	priv = NM_LLDP_LISTENER_GET_PRIVATE (self);
 	return !!priv->lldp_handle;
 }
