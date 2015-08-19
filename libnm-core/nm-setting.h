@@ -67,8 +67,6 @@ typedef enum {
 	NM_SETTING_BOOLEAN_FALSE    = 0,
 	NM_SETTING_BOOLEAN_TRUE     = 1,
 	NM_SETTING_BOOLEAN_DEFAULT  = 2,
-
-	_NM_SETTING_BOOLEAN_LAST, /*< skip >*/
 } NMSettingBoolean;
 
 /**
