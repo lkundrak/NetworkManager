@@ -30,7 +30,6 @@
 
 typedef struct {
 	char *iface;
-	int ifindex;
 
 	sd_lldp       *lldp_handle;
 	GHashTable    *lldp_neighbors;
@@ -430,7 +429,6 @@ nm_lldp_listener_start (NMLldpListener *self, int ifindex, const char *iface,
 		goto err;
 	}
 
-	priv->ifindex = ifindex;
 	priv->iface = strdup (iface);
 	return TRUE;
 
