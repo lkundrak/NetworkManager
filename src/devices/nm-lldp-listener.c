@@ -40,17 +40,10 @@ typedef struct {
 
 enum {
 	PROP_0,
+	PROP_NEIGHBORS,
 
 	LAST_PROP
 };
-
-enum {
-	NEIGHBORS_CHANGED,
-
-	LAST_SIGNAL
-};
-
-static guint signals[LAST_SIGNAL] = { 0 };
 
 G_DEFINE_TYPE (NMLldpListener, nm_lldp_listener, G_TYPE_OBJECT)
 
@@ -78,7 +71,8 @@ gvalue_destroy (gpointer data)
 	g_slice_free (GValue, value);
 }
 
-void nm_lldp_listener_get_neighbors (NMLldpListener *self, GValue *value)
+static void
+get_property_neighbors (NMLldpListener *self, GValue *value)
 {
 	GVariantBuilder array_builder, neigh_builder;
 	GHashTableIter iter;
@@ -427,7 +421,7 @@ next_tlv:
 	} else {
 		g_hash_table_destroy (priv->lldp_neighbors);
 		priv->lldp_neighbors = hash;
-		g_signal_emit (self, signals[NEIGHBORS_CHANGED], 0);
+		g_object_notify (G_OBJECT (self), NM_LLDP_LISTENER_NEIGHBORS);
 	}
 
 	/* Limit the rate of events */
@@ -540,7 +534,7 @@ nm_lldp_listener_stop (NMLldpListener *self)
 		size = g_hash_table_size (priv->lldp_neighbors);
 		g_hash_table_remove_all (priv->lldp_neighbors);
 		if (size)
-			g_signal_emit (self, signals[NEIGHBORS_CHANGED], 0);
+			g_object_notify (G_OBJECT (self), NM_LLDP_LISTENER_NEIGHBORS);
 	}
 
 	nm_clear_g_source (&priv->timer);
@@ -561,7 +555,12 @@ static void
 get_property (GObject *object, guint prop_id,
               GValue *value, GParamSpec *pspec)
 {
+	NMLldpListener *self = NM_LLDP_LISTENER (object);
+
 	switch (prop_id) {
+	case PROP_NEIGHBORS:
+		get_property_neighbors (self, value);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -615,12 +614,12 @@ nm_lldp_listener_class_init (NMLldpListenerClass *klass)
 	object_class->finalize = finalize;
 	object_class->get_property = get_property;
 
-	signals[NEIGHBORS_CHANGED] =
-		g_signal_new (NM_LLDP_LISTENER_SIGNAL_NEIGHBORS_CHANGED,
-		              G_OBJECT_CLASS_TYPE (object_class),
-		              G_SIGNAL_RUN_FIRST,
-		              G_STRUCT_OFFSET (NMLldpListenerClass, neighbors_changed),
-		              NULL, NULL, NULL,
-		              G_TYPE_NONE, 0);
+	g_object_class_install_property
+		(object_class, PROP_NEIGHBORS,
+		 g_param_spec_variant (NM_LLDP_LISTENER_NEIGHBORS, "", "",
+		                       G_VARIANT_TYPE ("aa{sv}"),
+		                       NULL,
+		                       G_PARAM_READABLE |
+		                       G_PARAM_STATIC_STRINGS));
 }
 

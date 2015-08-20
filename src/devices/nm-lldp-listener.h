@@ -33,7 +33,7 @@ G_BEGIN_DECLS
 #define NM_IS_LLDP_LISTENER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass),  NM_TYPE_LLDP_LISTENER))
 #define NM_LLDP_LISTENER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),  NM_TYPE_LLDP_LISTENER, NMLldpListenerClass))
 
-#define NM_LLDP_LISTENER_SIGNAL_NEIGHBORS_CHANGED "neghbors-changed"
+#define NM_LLDP_LISTENER_NEIGHBORS "neighbors"
 
 struct _NMLldpListener {
 	GObject parent;
@@ -41,9 +41,6 @@ struct _NMLldpListener {
 
 typedef struct {
 	GObjectClass parent;
-
-	/* Signals */
-	void (*neighbors_changed) (NMLldpListener *config);
 } NMLldpListenerClass;
 
 GType nm_lldp_listener_get_type (void);
@@ -51,7 +48,6 @@ NMLldpListener *nm_lldp_listener_new (void);
 gboolean nm_lldp_listener_start (NMLldpListener *self, int ifindex, const char *iface, GError **error);
 void nm_lldp_listener_stop (NMLldpListener *self);
 gboolean nm_lldp_listener_is_running (NMLldpListener *self);
-void nm_lldp_listener_get_neighbors (NMLldpListener *self, GValue *value);
 
 G_END_DECLS
 

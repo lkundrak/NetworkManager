@@ -2868,7 +2868,8 @@ master_ready_cb (NMActiveConnection *active,
 }
 
 static void
-lldp_neighbors_changed (NMLldpListener *lldp_listener, gpointer user_data)
+lldp_neighbors_changed (NMLldpListener *lldp_listener, GParamSpec *pspec,
+                        gpointer user_data)
 {
 	NMDevice *self = NM_DEVICE (user_data);
 
@@ -3069,7 +3070,7 @@ nm_device_activate_stage2_device_config (gpointer user_data)
 		else {
 			priv->lldp_listener = nm_lldp_listener_new ();
 			g_signal_connect (priv->lldp_listener,
-			                  NM_LLDP_LISTENER_SIGNAL_NEIGHBORS_CHANGED,
+			                  "notify::" NM_LLDP_LISTENER_NEIGHBORS,
 			                  G_CALLBACK (lldp_neighbors_changed),
 			                  self);
 		}
@@ -9422,6 +9423,7 @@ get_property (GObject *object, guint prop_id,
 	GHashTableIter iter;
 	NMConnection *connection;
 	GVariantBuilder array_builder;
+	GVariant *variant;
 
 	switch (prop_id) {
 	case PROP_UDI:
@@ -9530,8 +9532,10 @@ get_property (GObject *object, guint prop_id,
 		g_value_set_uint (value, priv->metered);
 		break;
 	case PROP_LLDP_NEIGHBORS:
-		if (priv->lldp_listener)
-			nm_lldp_listener_get_neighbors (priv->lldp_listener, value);
+		if (priv->lldp_listener) {
+			g_object_get (priv->lldp_listener, NM_LLDP_LISTENER_NEIGHBORS, &variant, NULL);
+			g_value_take_variant (value, variant);
+		}
 		else {
 			g_variant_builder_init (&array_builder, G_VARIANT_TYPE ("aa{sv}"));
 			g_value_take_variant (value, g_variant_builder_end (&array_builder));
