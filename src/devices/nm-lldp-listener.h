@@ -33,9 +33,6 @@ G_BEGIN_DECLS
 #define NM_IS_LLDP_LISTENER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass),  NM_TYPE_LLDP_LISTENER))
 #define NM_LLDP_LISTENER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),  NM_TYPE_LLDP_LISTENER, NMLldpListenerClass))
 
-#define NM_LLDP_LISTENER_IFACE "iface"
-#define NM_LLDP_LISTENER_IFINDEX "ifindex"
-
 #define NM_LLDP_LISTENER_SIGNAL_NEIGHBORS_CHANGED "neghbors-changed"
 
 struct _NMLldpListener {

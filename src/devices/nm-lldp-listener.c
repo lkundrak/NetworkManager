@@ -40,8 +40,6 @@ typedef struct {
 
 enum {
 	PROP_0,
-	PROP_IFACE,
-	PROP_IFINDEX,
 
 	LAST_PROP
 };
@@ -563,15 +561,7 @@ static void
 get_property (GObject *object, guint prop_id,
               GValue *value, GParamSpec *pspec)
 {
-	NMLldpListenerPrivate *priv = NM_LLDP_LISTENER_GET_PRIVATE (object);
-
 	switch (prop_id) {
-	case PROP_IFACE:
-		g_value_set_string (value, priv->iface);
-		break;
-	case PROP_IFINDEX:
-		g_value_set_int (value, priv->ifindex);
-		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -624,20 +614,6 @@ nm_lldp_listener_class_init (NMLldpListenerClass *klass)
 	object_class->dispose = dispose;
 	object_class->finalize = finalize;
 	object_class->get_property = get_property;
-
-	g_object_class_install_property
-		(object_class, PROP_IFACE,
-		 g_param_spec_string (NM_LLDP_LISTENER_IFACE, "", "",
-		                      NULL,
-		                      G_PARAM_READABLE |
-		                      G_PARAM_STATIC_STRINGS));
-
-	g_object_class_install_property
-		(object_class, PROP_IFINDEX,
-		 g_param_spec_int (NM_LLDP_LISTENER_IFINDEX, "", "",
-		                   0, G_MAXINT, 0,
-		                   G_PARAM_READABLE |
-		                   G_PARAM_STATIC_STRINGS));
 
 	signals[NEIGHBORS_CHANGED] =
 		g_signal_new (NM_LLDP_LISTENER_SIGNAL_NEIGHBORS_CHANGED,
