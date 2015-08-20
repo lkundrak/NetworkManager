@@ -71,79 +71,6 @@ gvalue_destroy (gpointer data)
 	g_slice_free (GValue, value);
 }
 
-static void
-get_property_neighbors (NMLldpListener *self, GValue *value)
-{
-	GVariantBuilder array_builder, neigh_builder;
-	GHashTableIter iter;
-	NMLldpListenerPrivate *priv;
-	gpointer ptr;
-	char *dest_str = NULL;
-
-	g_return_if_fail (NM_IS_LLDP_LISTENER (self));
-	priv = NM_LLDP_LISTENER_GET_PRIVATE (self);
-	g_variant_builder_init (&array_builder, G_VARIANT_TYPE ("aa{sv}"));
-	g_hash_table_iter_init (&iter, priv->lldp_neighbors);
-
-	while (g_hash_table_iter_next (&iter, NULL, &ptr)) {
-		LLDPNeighbor *neigh = ptr;
-		GHashTableIter val_iter;
-		gpointer key, val;
-
-		g_variant_builder_init (&neigh_builder, G_VARIANT_TYPE ("a{sv}"));
-
-		g_variant_builder_add (&neigh_builder, "{sv}",
-		                       NM_LLDP_ATTR_CHASSIS_ID_TYPE,
-		                       g_variant_new_uint32 (neigh->chassis_id_type));
-		g_variant_builder_add (&neigh_builder, "{sv}",
-		                       NM_LLDP_ATTR_CHASSIS_ID,
-		                       g_variant_new_string (neigh->chassis_id));
-		g_variant_builder_add (&neigh_builder, "{sv}",
-		                       NM_LLDP_ATTR_PORT_ID_TYPE,
-		                       g_variant_new_uint32 (neigh->port_id_type));
-		g_variant_builder_add (&neigh_builder, "{sv}",
-		                       NM_LLDP_ATTR_PORT_ID,
-		                       g_variant_new_string (neigh->port_id));
-
-		switch (neigh->dest) {
-		case LLDP_DEST_TYPE_NEAREST_BRIDGE:
-			dest_str = NM_LLDP_DEST_NEAREST_BRIDGE;
-			break;
-		case LLDP_DEST_TYPE_NEAREST_NON_TPMR_BRIDGE:
-			dest_str = NM_LLDP_DEST_NEAREST_NON_TPMR_BRIDGE;
-			break;
-		case LLDP_DEST_TYPE_NEAREST_CUSTOMER_BRIDGE:
-			dest_str = NM_LLDP_DEST_NEAREST_CUSTOMER_BRIDGE;
-			break;
-		}
-
-		if (dest_str) {
-			g_variant_builder_add (&neigh_builder, "{sv}",
-			                       NM_LLDP_ATTR_DESTINATION,
-			                       g_variant_new_string (dest_str));
-		}
-
-		g_hash_table_iter_init (&val_iter, neigh->tlvs);
-		while (g_hash_table_iter_next (&val_iter, &key, &val)) {
-			GValue *item = val;
-
-			if (G_VALUE_HOLDS_STRING (item)) {
-				g_variant_builder_add (&neigh_builder, "{sv}",
-				                       key,
-				                       g_variant_new_string (g_value_get_string (item)));
-			} else if (G_VALUE_HOLDS_UINT (item)) {
-				g_variant_builder_add (&neigh_builder, "{sv}",
-				                       key,
-				                       g_variant_new_uint32 (g_value_get_uint (item)));
-			}
-		}
-
-		g_variant_builder_add (&array_builder, "a{sv}", &neigh_builder);
-	}
-
-	g_value_take_variant (value, g_variant_builder_end (&array_builder));
-}
-
 static guint
 lldp_neighbor_id_hash (gconstpointer ptr)
 {
@@ -549,6 +476,79 @@ nm_lldp_listener_is_running (NMLldpListener *self)
 
 	priv = NM_LLDP_LISTENER_GET_PRIVATE (self);
 	return !!priv->lldp_handle;
+}
+
+static void
+get_property_neighbors (NMLldpListener *self, GValue *value)
+{
+	GVariantBuilder array_builder, neigh_builder;
+	GHashTableIter iter;
+	NMLldpListenerPrivate *priv;
+	gpointer ptr;
+	char *dest_str = NULL;
+
+	g_return_if_fail (NM_IS_LLDP_LISTENER (self));
+	priv = NM_LLDP_LISTENER_GET_PRIVATE (self);
+	g_variant_builder_init (&array_builder, G_VARIANT_TYPE ("aa{sv}"));
+	g_hash_table_iter_init (&iter, priv->lldp_neighbors);
+
+	while (g_hash_table_iter_next (&iter, NULL, &ptr)) {
+		LLDPNeighbor *neigh = ptr;
+		GHashTableIter val_iter;
+		gpointer key, val;
+
+		g_variant_builder_init (&neigh_builder, G_VARIANT_TYPE ("a{sv}"));
+
+		g_variant_builder_add (&neigh_builder, "{sv}",
+		                       NM_LLDP_ATTR_CHASSIS_ID_TYPE,
+		                       g_variant_new_uint32 (neigh->chassis_id_type));
+		g_variant_builder_add (&neigh_builder, "{sv}",
+		                       NM_LLDP_ATTR_CHASSIS_ID,
+		                       g_variant_new_string (neigh->chassis_id));
+		g_variant_builder_add (&neigh_builder, "{sv}",
+		                       NM_LLDP_ATTR_PORT_ID_TYPE,
+		                       g_variant_new_uint32 (neigh->port_id_type));
+		g_variant_builder_add (&neigh_builder, "{sv}",
+		                       NM_LLDP_ATTR_PORT_ID,
+		                       g_variant_new_string (neigh->port_id));
+
+		switch (neigh->dest) {
+		case LLDP_DEST_TYPE_NEAREST_BRIDGE:
+			dest_str = NM_LLDP_DEST_NEAREST_BRIDGE;
+			break;
+		case LLDP_DEST_TYPE_NEAREST_NON_TPMR_BRIDGE:
+			dest_str = NM_LLDP_DEST_NEAREST_NON_TPMR_BRIDGE;
+			break;
+		case LLDP_DEST_TYPE_NEAREST_CUSTOMER_BRIDGE:
+			dest_str = NM_LLDP_DEST_NEAREST_CUSTOMER_BRIDGE;
+			break;
+		}
+
+		if (dest_str) {
+			g_variant_builder_add (&neigh_builder, "{sv}",
+			                       NM_LLDP_ATTR_DESTINATION,
+			                       g_variant_new_string (dest_str));
+		}
+
+		g_hash_table_iter_init (&val_iter, neigh->tlvs);
+		while (g_hash_table_iter_next (&val_iter, &key, &val)) {
+			GValue *item = val;
+
+			if (G_VALUE_HOLDS_STRING (item)) {
+				g_variant_builder_add (&neigh_builder, "{sv}",
+				                       key,
+				                       g_variant_new_string (g_value_get_string (item)));
+			} else if (G_VALUE_HOLDS_UINT (item)) {
+				g_variant_builder_add (&neigh_builder, "{sv}",
+				                       key,
+				                       g_variant_new_uint32 (g_value_get_uint (item)));
+			}
+		}
+
+		g_variant_builder_add (&array_builder, "a{sv}", &neigh_builder);
+	}
+
+	g_value_take_variant (value, g_variant_builder_end (&array_builder));
 }
 
 static void
