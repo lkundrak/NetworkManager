@@ -369,10 +369,10 @@ ppp_state_changed (NMPPPManager *ppp_manager, NMPPPStatus status, gpointer user_
 
 	switch (status) {
 	case NM_PPP_STATUS_DISCONNECT:
-		nm_device_state_changed (device, NM_DEVICE_STATE_FAILED, NM_DEVICE_STATE_REASON_PPP_DISCONNECT);
+		nm_device_ip4_method_failed (device, NM_DEVICE_STATE_REASON_PPP_DISCONNECT);
 		break;
 	case NM_PPP_STATUS_DEAD:
-		nm_device_state_changed (device, NM_DEVICE_STATE_FAILED, NM_DEVICE_STATE_REASON_PPP_FAILED);
+		nm_device_ip4_method_failed (device, NM_DEVICE_STATE_REASON_PPP_FAILED);
 		break;
 	default:
 		break;

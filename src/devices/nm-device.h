@@ -495,6 +495,9 @@ const NMPlatformIP6Route *nm_device_get_ip6_default_route (NMDevice *self, gbool
 
 void nm_device_spawn_iface_helper (NMDevice *self);
 
+void nm_device_ip4_method_failed (NMDevice *self, NMDeviceStateReason reason);
+void nm_device_ip6_method_failed (NMDevice *self, NMDeviceStateReason reason);
+
 G_END_DECLS
 
 #endif	/* NM_DEVICE_H */
