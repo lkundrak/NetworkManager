@@ -1520,7 +1520,7 @@ nm_platform_slave_get_option (NMPlatform *self, int ifindex, const char *option)
 }
 
 gboolean
-nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlanid)
+nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlanid, int *flags)
 {
 	_CHECK_SELF (self, klass, FALSE);
 
@@ -1530,11 +1530,13 @@ nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlan
 		*parent = 0;
 	if (vlanid)
 		*vlanid = 0;
+	if (flags)
+		*flags = 0;
 
 	if (nm_platform_link_get_type (self, ifindex) != NM_LINK_TYPE_VLAN)
 		return FALSE;
 
-	return klass->vlan_get_info (self, ifindex, parent, vlanid);
+	return klass->vlan_get_info (self, ifindex, parent, vlanid, flags);
 }
 
 gboolean
