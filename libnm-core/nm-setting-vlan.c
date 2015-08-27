@@ -558,6 +558,20 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 	return TRUE;
 }
 
+static void
+nm_setting_vlan_no_flags (NMSetting *setting,
+                          GVariant *connection_dict,
+                          const char *property)
+{
+	/* We want to default to REORDER_HDR flag in order to be compatible
+	 * with kernel default setting, see rh #1250225. */
+	guint32 flags = NM_VLAN_FLAG_REORDER_HEADERS;
+
+	g_object_set (G_OBJECT (setting),
+	              NM_SETTING_VLAN_FLAGS, flags,
+	              NULL);
+}
+
 static GSList *
 priority_strv_to_maplist (NMVlanPriorityMap map, char **strv)
 {
@@ -753,6 +767,11 @@ nm_setting_vlan_class_init (NMSettingVlanClass *setting_class)
 		                     G_PARAM_CONSTRUCT |
 		                     NM_SETTING_PARAM_INFERRABLE |
 		                     G_PARAM_STATIC_STRINGS));
+	_nm_setting_class_override_property (parent_class, NM_SETTING_VLAN_FLAGS,
+	                                     NULL,
+	                                     NULL,
+	                                     NULL,
+	                                     nm_setting_vlan_no_flags);
 
 	/**
 	 * NMSettingVlan:ingress-priority-map:
