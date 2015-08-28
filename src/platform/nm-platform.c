@@ -1562,6 +1562,19 @@ nm_platform_vlan_set_ingress_map (NMPlatform *self, int ifindex, int from, int t
 }
 
 gboolean
+nm_platform_vlan_get_ingress_map (NMPlatform *self, int ifindex, guint32 **map)
+{
+	_CHECK_SELF (self, klass, FALSE);
+
+	g_return_val_if_fail (ifindex > 0, FALSE);
+
+	if (nm_platform_link_get_type (self, ifindex) != NM_LINK_TYPE_VLAN)
+		return FALSE;
+
+	return klass->vlan_get_ingress_map (self, ifindex, map);
+}
+
+gboolean
 nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to)
 {
 	_CHECK_SELF (self, klass, FALSE);
@@ -1570,6 +1583,19 @@ nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to
 
 	_LOGD ("link: setting vlan egress map for %d from %d to %d", ifindex, from, to);
 	return klass->vlan_set_egress_map (self, ifindex, from, to);
+}
+
+gboolean
+nm_platform_vlan_get_egress_map (NMPlatform *self, int ifindex, guint32 **map_from, guint32 **map_to, guint32 *size)
+{
+	_CHECK_SELF (self, klass, FALSE);
+
+	g_return_val_if_fail (ifindex > 0, FALSE);
+
+	if (nm_platform_link_get_type (self, ifindex) != NM_LINK_TYPE_VLAN)
+		return FALSE;
+
+	return klass->vlan_get_egress_map (self, ifindex, map_from, map_to, size);
 }
 
 NMPlatformError

@@ -1041,8 +1041,25 @@ _nmp_vt_cmd_plobj_init_from_nl_link (NMPlatform *platform, NMPlatformObject *_ob
 
 	if (obj->type == NM_LINK_TYPE_VLAN) {
 		if (!g_strcmp0 (rtnl_link_get_type (nlo), "vlan")) {
+			int i, e_size;
+			guint32 *i_map;
+			struct vlan_map *e_map;
+
 			obj->vlan_id = rtnl_link_vlan_get_id (nlo);
 			obj->vlan_flags = rtnl_link_vlan_get_flags (nlo);
+			i_map = rtnl_link_vlan_get_ingress_map (nlo);
+			e_map = rtnl_link_vlan_get_egress_map (nlo, &e_size);
+			for (i = 0; i_map && i <= VLAN_PRIO_MAX; i++)
+				obj->vlan_ingress_map[i] = i_map[i];
+			obj->vlan_egress_map_size = e_size;
+			if (!obj->vlan_egress_map_from && e_size)
+				obj->vlan_egress_map_from = g_slice_alloc (sizeof (guint32) * e_size);
+			if (!obj->vlan_egress_map_to && e_size)
+				obj->vlan_egress_map_to = g_slice_alloc (sizeof (guint32) * e_size);
+			for (i = 0; e_map && i < e_size; i++) {
+				obj->vlan_egress_map_from[i] = e_map[i].vm_from;
+				obj->vlan_egress_map_to[i] = e_map[i].vm_to;
+			}
 		} else if (completed_from_cache) {
 			_lookup_link_cached (platform, obj->ifindex, completed_from_cache, &link_cached);
 			if (link_cached)
@@ -3210,6 +3227,16 @@ vlan_set_ingress_map (NMPlatform *platform, int ifindex, int from, int to)
 }
 
 static gboolean
+vlan_get_ingress_map (NMPlatform *platform, int ifindex, guint32 **map)
+{
+	const NMPObject *obj = cache_lookup_link (platform, ifindex);
+
+	if (obj && map)
+		*map = (guint32 *) obj->link.vlan_ingress_map;
+	return !!obj;
+}
+
+static gboolean
 vlan_set_egress_map (NMPlatform *platform, int ifindex, int from, int to)
 {
 	auto_nl_object struct rtnl_link *change = (struct rtnl_link *) build_rtnl_link (ifindex, NULL, NM_LINK_TYPE_VLAN);
@@ -3220,6 +3247,20 @@ vlan_set_egress_map (NMPlatform *platform, int ifindex, int from, int to)
 	debug ("link: change %d: vlan egress map %d -> %d", ifindex, from, to);
 
 	return do_change_link (platform, change, TRUE) == NM_PLATFORM_ERROR_SUCCESS;
+}
+
+static gboolean
+vlan_get_egress_map (NMPlatform *platform, int ifindex, guint32 **map_from, guint32 **map_to, guint32 *size)
+{
+	const NMPObject *obj = cache_lookup_link (platform, ifindex);
+
+	if (obj && map_from)
+		*map_from = obj->link.vlan_egress_map_from;
+	if (obj && map_to)
+		*map_to = obj->link.vlan_egress_map_to;
+	if (obj && size)
+		*size = obj->link.vlan_egress_map_size;
+	return !!obj;
 }
 
 static gboolean
@@ -5033,7 +5074,9 @@ nm_linux_platform_class_init (NMLinuxPlatformClass *klass)
 	platform_class->vlan_get_info = vlan_get_info;
 	platform_class->vlan_set_flags = vlan_set_flags;
 	platform_class->vlan_set_ingress_map = vlan_set_ingress_map;
+	platform_class->vlan_get_ingress_map = vlan_get_ingress_map;
 	platform_class->vlan_set_egress_map = vlan_set_egress_map;
+	platform_class->vlan_get_egress_map = vlan_get_egress_map;
 
 	platform_class->infiniband_partition_add = infiniband_partition_add;
 	platform_class->infiniband_get_info = infiniband_get_info;
