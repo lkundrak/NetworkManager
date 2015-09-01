@@ -680,8 +680,23 @@ NmcOutputField nmc_fields_setting_dcb[] = {
                                        NM_SETTING_DCB_PRIORITY_TRAFFIC_CLASS
 #define NMC_FIELDS_SETTING_DCB_COMMON  NMC_FIELDS_SETTING_DCB_ALL
 
-/*----------------------------------------------------------------------------*/
+/* Available fields for NM_SETTING_IP_TUNNEL_SETTING_NAME */
+NmcOutputField nmc_fields_setting_ip_tunnel[] = {
+	SETTING_FIELD ("name",  8),                                        /* 0 */
+	SETTING_FIELD (NM_SETTING_IP_TUNNEL_MODE, 20),                     /* 1 */
+	SETTING_FIELD (NM_SETTING_IP_TUNNEL_LOCAL, 40),                    /* 2 */
+	SETTING_FIELD (NM_SETTING_IP_TUNNEL_REMOTE, 40),                   /* 3 */
+	SETTING_FIELD (NM_SETTING_IP_TUNNEL_TTL, 20),                      /* 4 */
+	{NULL, NULL, 0, NULL, FALSE, FALSE, 0}
+};
+#define NMC_FIELDS_SETTING_IP_TUNNEL_ALL     "name"","\
+                                             NM_SETTING_IP_TUNNEL_MODE","\
+                                             NM_SETTING_IP_TUNNEL_LOCAL","\
+                                             NM_SETTING_IP_TUNNEL_REMOTE","\
+                                             NM_SETTING_IP_TUNNEL_TTL
+#define NMC_FIELDS_SETTING_IP_TUNNEL_COMMON  NMC_FIELDS_SETTING_IP_TUNNEL_ALL
 
+/*----------------------------------------------------------------------------*/
 static char *
 wep_key_type_to_string (NMWepKeyType type)
 {
@@ -1261,6 +1276,11 @@ DEFINE_GETTER (nmc_property_gsm_get_home_only, NM_SETTING_GSM_HOME_ONLY)
 DEFINE_GETTER (nmc_property_ib_get_mac_address, NM_SETTING_INFINIBAND_MAC_ADDRESS)
 DEFINE_GETTER (nmc_property_ib_get_transport_mode, NM_SETTING_INFINIBAND_TRANSPORT_MODE)
 
+DEFINE_GETTER (nmc_property_ip_tunnel_get_local, NM_SETTING_IP_TUNNEL_LOCAL);
+DEFINE_GETTER (nmc_property_ip_tunnel_get_remote, NM_SETTING_IP_TUNNEL_REMOTE);
+DEFINE_GETTER (nmc_property_ip_tunnel_get_ttl, NM_SETTING_IP_TUNNEL_TTL);
+
+
 static char *
 nmc_property_ib_get_mtu (NMSetting *setting, NmcPropertyGetType get_type)
 {
@@ -1589,6 +1609,43 @@ nmc_property_wired_set_wake_on_lan (NMSetting *setting, const char *prop,
 	}
 
 	g_object_set (setting, prop, (guint) wol, NULL);
+	return TRUE;
+}
+
+static char *
+nmc_property_ip_tunnel_get_mode (NMSetting *setting, NmcPropertyGetType get_type)
+{
+	NMSettingIPTunnel *s_ip_tunnel = NM_SETTING_IP_TUNNEL (setting);
+	NMSettingIPTunnelMode mode;
+
+	mode = nm_setting_ip_tunnel_get_mode (s_ip_tunnel);
+	return nm_utils_enum_to_str (nm_setting_ip_tunnel_mode_get_type (), mode);
+}
+
+static gboolean
+nmc_property_ip_tunnel_set_mode (NMSetting *setting, const char *prop,
+                                 const char *val, GError **error)
+{
+	NMSettingIPTunnelMode mode;
+	gs_free const char **values = NULL;
+	gs_free char *options = NULL;
+	gboolean ret;
+
+	ret = nm_utils_enum_from_str (nm_setting_ip_tunnel_mode_get_type(), val,
+	                               (int *) &mode, NULL);
+
+	if (!ret) {
+		values = nm_utils_enum_get_values (nm_setting_ip_tunnel_mode_get_type (),
+		                                   NM_SETTING_IP_TUNNEL_MODE_UNKNOWN + 1,
+		                                   NM_SETTING_IP_TUNNEL_MODE_MAX);
+		options = g_strjoinv (",", (char **) values);
+		g_set_error (error, 1, 0, _("invalid option '%s', use one from %s"),
+		             val, options);
+
+		return FALSE;
+	}
+
+	g_object_set (setting, prop, mode, NULL);
 	return TRUE;
 }
 
@@ -6667,6 +6724,37 @@ nmc_properties_init (void)
 	                    NULL,
 	                    NULL,
 	                    NULL);
+
+	/* Add editable properties for NM_SETTING_IP_TUNNEL_SETTING_NAME */
+	nmc_add_prop_funcs (GLUE (IP_TUNNEL, MODE),
+	                    nmc_property_ip_tunnel_get_mode,
+	                    nmc_property_ip_tunnel_set_mode,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (IP_TUNNEL, LOCAL),
+	                    nmc_property_ip_tunnel_get_local,
+	                    nmc_property_set_string,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (IP_TUNNEL, REMOTE),
+	                    nmc_property_ip_tunnel_get_remote,
+	                    nmc_property_set_string,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (IP_TUNNEL, TTL),
+	                    nmc_property_ip_tunnel_get_ttl,
+	                    nmc_property_set_uint,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+
 }
 
 void
@@ -7807,6 +7895,35 @@ setting_dcb_details (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboo
 	return TRUE;
 }
 
+static gboolean
+setting_ip_tunnel_details (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboolean secrets)
+{
+	NMSettingIPTunnel *s_ip_tunnel = NM_SETTING_IP_TUNNEL (setting);
+	NmcOutputField *tmpl, *arr;
+	size_t tmpl_len;
+
+	g_return_val_if_fail (NM_IS_SETTING_IP_TUNNEL (s_ip_tunnel), FALSE);
+
+	tmpl = nmc_fields_setting_ip_tunnel;
+	tmpl_len = sizeof (nmc_fields_setting_ip_tunnel);
+	nmc->print_fields.indices = parse_output_fields (one_prop ? one_prop : NMC_FIELDS_SETTING_IP_TUNNEL_ALL,
+	                                                 tmpl, FALSE, NULL, NULL);
+	arr = nmc_dup_fields_array (tmpl, tmpl_len, NMC_OF_FLAG_FIELD_NAMES);
+	g_ptr_array_add (nmc->output_data, arr);
+
+	arr = nmc_dup_fields_array (tmpl, tmpl_len, NMC_OF_FLAG_SECTION_PREFIX);
+	set_val_str (arr, 0, g_strdup (nm_setting_get_name (setting)));
+	set_val_str (arr, 1, nmc_property_ip_tunnel_get_mode (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 2, nmc_property_ip_tunnel_get_local (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 3, nmc_property_ip_tunnel_get_remote (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 4, nmc_property_ip_tunnel_get_ttl (setting, NMC_PROPERTY_GET_PRETTY));
+	g_ptr_array_add (nmc->output_data, arr);
+
+	print_data (nmc);  /* Print all data */
+
+	return TRUE;
+}
+
 typedef struct {
 	const char *sname;
 	gboolean (*func) (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboolean secrets);
@@ -7838,6 +7955,7 @@ static const SettingDetails detail_printers[] = {
 	{ NM_SETTING_TEAM_SETTING_NAME,              setting_team_details },
 	{ NM_SETTING_TEAM_PORT_SETTING_NAME,         setting_team_port_details },
 	{ NM_SETTING_DCB_SETTING_NAME,               setting_dcb_details },
+	{ NM_SETTING_IP_TUNNEL_SETTING_NAME,         setting_ip_tunnel_details },
 	{ NULL },
 };
 
