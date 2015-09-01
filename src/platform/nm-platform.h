@@ -482,6 +482,9 @@ typedef struct {
 	gboolean (*vlan_set_ingress_map) (NMPlatform *, int ifindex, int from, int to);
 	gboolean (*vlan_set_egress_map) (NMPlatform *, int ifindex, int from, int to);
 
+	gboolean (*gre_add) (NMPlatform *, const char *name, in_addr_t local, in_addr_t remote, guint8 ttl,
+	                     NMPlatformLink *out_link);
+
 	gboolean (*infiniband_partition_add) (NMPlatform *, int parent, int p_key, NMPlatformLink *out_link);
 	gboolean (*infiniband_get_info)      (NMPlatform *,
 	                                      int ifindex,
@@ -695,6 +698,9 @@ void        nm_platform_wifi_indicate_addressing_running (NMPlatform *self, int 
 guint32     nm_platform_mesh_get_channel      (NMPlatform *self, int ifindex);
 gboolean    nm_platform_mesh_set_channel      (NMPlatform *self, int ifindex, guint32 channel);
 gboolean    nm_platform_mesh_set_ssid         (NMPlatform *self, int ifindex, const guint8 *ssid, gsize len);
+
+NMPlatformError nm_platform_gre_add (NMPlatform *self, const char *name, in_addr_t local, in_addr_t remote,
+                                     guint8 ttl, NMPlatformLink *out_link);
 
 const NMPlatformIP4Address *nm_platform_ip4_address_get (NMPlatform *self, int ifindex, in_addr_t address, int plen);
 const NMPlatformIP6Address *nm_platform_ip6_address_get (NMPlatform *self, int ifindex, struct in6_addr address, int plen);

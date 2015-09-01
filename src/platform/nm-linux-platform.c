@@ -36,6 +36,7 @@
 #include <netlink/cache.h>
 #include <netlink/route/link.h>
 #include <netlink/route/link/vlan.h>
+#include <netlink/route/link/ipgre.h>
 #include <netlink/route/addr.h>
 #include <netlink/route/route.h>
 #include <gudev/gudev.h>
@@ -3202,6 +3203,25 @@ vlan_set_egress_map (NMPlatform *platform, int ifindex, int from, int to)
 	return do_change_link (platform, change, TRUE) == NM_PLATFORM_ERROR_SUCCESS;
 }
 
+static int
+gre_add (NMPlatform *platform,
+         const char *name,
+         in_addr_t local,
+         in_addr_t remote,
+         guint8 ttl,
+         NMPlatformLink *out_link)
+{
+	auto_nl_object struct rtnl_link *rtnllink = (struct rtnl_link *) build_rtnl_link (0, name, NM_LINK_TYPE_GRE);
+
+	rtnl_link_ipgre_set_local (rtnllink, local);
+	rtnl_link_ipgre_set_remote (rtnllink, remote);
+	rtnl_link_ipgre_set_ttl (rtnllink, ttl);
+
+	_LOGD ("link: add gre '%s', local 0x%x, remote 0x%x, ttl %d", name, local, remote, ttl);
+
+	return do_add_link_with_lookup (platform, name, rtnllink, NM_LINK_TYPE_GRE, out_link);
+}
+
 static gboolean
 link_enslave (NMPlatform *platform, int master, int slave)
 {
@@ -5057,6 +5077,8 @@ nm_linux_platform_class_init (NMLinuxPlatformClass *klass)
 	platform_class->mesh_get_channel = mesh_get_channel;
 	platform_class->mesh_set_channel = mesh_set_channel;
 	platform_class->mesh_set_ssid = mesh_set_ssid;
+
+	platform_class->gre_add = gre_add;
 
 	platform_class->ip4_address_get = ip4_address_get;
 	platform_class->ip6_address_get = ip6_address_get;
