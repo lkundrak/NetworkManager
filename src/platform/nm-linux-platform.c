@@ -36,6 +36,10 @@
 #include <netlink/cache.h>
 #include <netlink/route/link.h>
 #include <netlink/route/link/vlan.h>
+#include <netlink/route/link/ipgre.h>
+#include <netlink/route/link/ipip.h>
+#include <netlink/route/link/sit.h>
+#include <netlink/route/link/ip6tnl.h>
 #include <netlink/route/addr.h>
 #include <netlink/route/route.h>
 #include <gudev/gudev.h>
@@ -3202,6 +3206,73 @@ vlan_set_egress_map (NMPlatform *platform, int ifindex, int from, int to)
 	return do_change_link (platform, change, TRUE) == NM_PLATFORM_ERROR_SUCCESS;
 }
 
+static int
+ip4_tunnel_add (NMPlatform *platform,
+                NMLinkType type,
+                const char *name,
+                in_addr_t local,
+                in_addr_t remote,
+                guint8 ttl,
+                NMPlatformLink *out_link)
+{
+	auto_nl_object struct rtnl_link *rtnllink;
+
+	_LOGD ("link: add ip4 tunnel '%s' type %d", name, (int) type);
+
+	switch (type) {
+	case NM_LINK_TYPE_IPIP:
+		rtnllink = (struct rtnl_link *) build_rtnl_link (0, name, NM_LINK_TYPE_IPIP);
+		rtnl_link_ipip_set_local (rtnllink, local);
+		rtnl_link_ipip_set_remote (rtnllink, remote);
+		rtnl_link_ipip_set_ttl (rtnllink, ttl);
+		break;
+	case NM_LINK_TYPE_GRE:
+		rtnllink = (struct rtnl_link *) build_rtnl_link (0, name, NM_LINK_TYPE_GRE);
+		rtnl_link_ipgre_set_local (rtnllink, local);
+		rtnl_link_ipgre_set_remote (rtnllink, remote);
+		rtnl_link_ipgre_set_ttl (rtnllink, ttl);
+		break;
+	case NM_LINK_TYPE_SIT:
+		rtnllink = (struct rtnl_link *) build_rtnl_link (0, name, NM_LINK_TYPE_SIT);
+		rtnl_link_sit_set_local (rtnllink, local);
+		rtnl_link_sit_set_remote (rtnllink, remote);
+		rtnl_link_sit_set_ttl (rtnllink, ttl);
+		break;
+	default:
+		_LOGW ("link type %d not supported", (int) type);
+		return FALSE;
+	}
+
+	return do_add_link_with_lookup (platform, name, rtnllink, type, out_link);
+}
+
+static int
+ip6_tunnel_add (NMPlatform *platform,
+                NMLinkType type,
+                const char *name,
+                struct in6_addr *local,
+                struct in6_addr *remote,
+                guint8 ttl,
+                NMPlatformLink *out_link)
+{
+	auto_nl_object struct rtnl_link *rtnllink;
+
+	_LOGD ("link: add ip6 tunnel '%s' type %d", name, (int) type);
+
+	if (type == NM_LINK_TYPE_IP6GRE) {
+		_LOGW ("link: IP6GRE creation not supported");
+		return FALSE;
+	}
+
+	rtnllink = (struct rtnl_link *) build_rtnl_link (0, name, type);
+	rtnl_link_ip6_tnl_set_local (rtnllink, local);
+	rtnl_link_ip6_tnl_set_remote (rtnllink, remote);
+	rtnl_link_ip6_tnl_set_ttl (rtnllink, ttl);
+	rtnl_link_ip6_tnl_set_proto (rtnllink, type == NM_LINK_TYPE_IPIP6 ? IPPROTO_IPIP : IPPROTO_IPV6);
+
+	return do_add_link_with_lookup (platform, name, rtnllink, type, out_link);
+}
+
 static gboolean
 link_enslave (NMPlatform *platform, int master, int slave)
 {
@@ -5057,6 +5128,9 @@ nm_linux_platform_class_init (NMLinuxPlatformClass *klass)
 	platform_class->mesh_get_channel = mesh_get_channel;
 	platform_class->mesh_set_channel = mesh_set_channel;
 	platform_class->mesh_set_ssid = mesh_set_ssid;
+
+	platform_class->ip4_tunnel_add = ip4_tunnel_add;
+	platform_class->ip6_tunnel_add = ip6_tunnel_add;
 
 	platform_class->ip4_address_get = ip4_address_get;
 	platform_class->ip6_address_get = ip6_address_get;
