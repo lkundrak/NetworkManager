@@ -15,7 +15,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Copyright 2013 Red Hat, Inc.
+ * Copyright 2013 - 2015 Red Hat, Inc.
  */
 
 #include "config.h"
@@ -36,7 +36,7 @@
 #include "nm-device-logging.h"
 _LOG_DECLARE_SELF(NMDeviceGre);
 
-G_DEFINE_TYPE (NMDeviceGre, nm_device_gre, NM_TYPE_DEVICE_GENERIC)
+G_DEFINE_TYPE (NMDeviceGre, nm_device_gre, NM_TYPE_DEVICE)
 
 #define NM_DEVICE_GRE_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_DEVICE_GRE, NMDeviceGrePrivate))
 
@@ -110,19 +110,178 @@ link_changed (NMDevice *device, NMPlatformLink *info)
 	update_properties (device);
 }
 
+static gboolean
+complete_connection (NMDevice *device,
+                     NMConnection *connection,
+                     const char *specific_object,
+                     const GSList *existing_connections,
+                     GError **error)
+{
+	NMSettingTunnel *s_tunnel;
+
+	nm_utils_complete_generic (connection,
+	                           NM_SETTING_TUNNEL_SETTING_NAME,
+	                           existing_connections,
+	                           NULL,
+	                           _("GRE connection"),
+	                           NULL,
+	                           TRUE);
+
+	s_tunnel = nm_connection_get_setting_tunnel (connection);
+	if (!s_tunnel) {
+		g_set_error_literal (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_INVALID_CONNECTION,
+		                     "A 'tunnel' setting is required.");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void
+update_connection (NMDevice *device, NMConnection *connection)
+{
+	NMDeviceGre *self = NM_DEVICE_GRE (device);
+	NMSettingTunnel *s_tunnel = nm_connection_get_setting_tunnel (connection);
+	NMPlatformGreProperties props;
+	in_addr_t local = 0, remote = 0;
+	char buffer[INET_ADDRSTRLEN];
+
+	if (!s_tunnel) {
+		s_tunnel = (NMSettingTunnel *) nm_setting_tunnel_new ();
+		nm_connection_add_setting (connection, (NMSetting *) s_tunnel);
+	}
+
+	if (!nm_platform_gre_get_properties (NM_PLATFORM_GET, nm_device_get_ifindex (device), &props)) {
+		_LOGW (LOGD_HW, "failed to get GRE interface info while updating connection.");
+		return;
+	}
+
+	if (nm_setting_tunnel_get_mode (s_tunnel) != NM_SETTING_TUNNEL_MODE_GRE)
+		g_object_set (G_OBJECT (s_tunnel), NM_SETTING_TUNNEL_MODE, NM_SETTING_TUNNEL_MODE_GRE, NULL);
+
+	if (nm_setting_tunnel_get_local (s_tunnel))
+		local = inet_pton (AF_INET, nm_setting_tunnel_get_local (s_tunnel), &local);
+	if (local != props.local) {
+		g_object_set (G_OBJECT (s_tunnel),
+		              NM_SETTING_TUNNEL_LOCAL,
+		              props.local ? inet_ntop (AF_INET, &props.local, buffer, sizeof (buffer)) : NULL,
+		              NULL);
+	}
+
+	if (nm_setting_tunnel_get_remote (s_tunnel))
+		remote = inet_pton (AF_INET, nm_setting_tunnel_get_remote (s_tunnel), &remote);
+	if (remote != props.remote) {
+		g_object_set (G_OBJECT (s_tunnel),
+		              NM_SETTING_TUNNEL_REMOTE,
+		              props.remote ? inet_ntop (AF_INET, &props.remote, buffer, sizeof (buffer)) : NULL,
+		              NULL);
+	}
+
+	if (nm_setting_tunnel_get_ttl (s_tunnel) != props.ttl)
+		g_object_set (G_OBJECT (s_tunnel), NM_SETTING_TUNNEL_TTL, props.ttl, NULL);
+}
+
+static gboolean
+create_and_realize (NMDevice *device,
+                    NMConnection *connection,
+                    NMDevice *parent,
+                    NMPlatformLink *out_plink,
+                    GError **error)
+{
+	const char *iface = nm_device_get_iface (device);
+	NMSettingTunnel *s_tunnel;
+	NMPlatformError plerr;
+	in_addr_t local = 0, remote = 0;
+	const char *str;
+
+	s_tunnel = nm_connection_get_setting_tunnel (connection);
+	g_assert (s_tunnel);
+	g_assert (out_plink);
+
+	str = nm_setting_tunnel_get_local (s_tunnel);
+	if (str)
+		inet_pton (AF_INET, str, &local);
+
+	str = nm_setting_tunnel_get_remote (s_tunnel);
+	g_assert (str);
+	inet_pton (AF_INET, str, &remote);
+
+	plerr = nm_platform_gre_add (NM_PLATFORM_GET, iface, local, remote,
+	                             nm_setting_tunnel_get_ttl (s_tunnel),
+	                             out_plink);
+	if (plerr != NM_PLATFORM_ERROR_SUCCESS && plerr != NM_PLATFORM_ERROR_EXISTS) {
+		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_CREATION_FAILED,
+		             "Failed to create GRE interface '%s' for '%s': %s",
+		             iface,
+		             nm_connection_get_id (connection),
+		             nm_platform_error_to_string (plerr));
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+realize (NMDevice *self, NMPlatformLink *plink, GError **error)
+{
+	update_properties (self);
+	return TRUE;
+}
+
+static gboolean
+addr_match (const char *str1, in_addr_t a2)
+{
+	in_addr_t a1;
+
+	if (!str1 && !a2)
+		return TRUE;
+
+	if (!str1 || !a2)
+		return FALSE;
+
+	if (inet_pton (AF_INET, str1, &a1) != 1)
+		return FALSE;
+
+	return a1 == a2;
+}
+
+static gboolean
+check_connection_compatible (NMDevice *device, NMConnection *connection)
+{
+	NMDeviceGre *self = NM_DEVICE_GRE (device);
+	NMDeviceGrePrivate *priv = NM_DEVICE_GRE_GET_PRIVATE (self);
+	NMSettingTunnel *s_tunnel;
+
+	update_properties (device);
+
+	if (!NM_DEVICE_CLASS (nm_device_gre_parent_class)->check_connection_compatible (device, connection))
+		return FALSE;
+
+	s_tunnel = nm_connection_get_setting_tunnel (connection);
+	if (!s_tunnel)
+		return FALSE;
+
+	if (nm_setting_tunnel_get_mode (s_tunnel) != NM_SETTING_TUNNEL_MODE_GRE)
+		return FALSE;
+
+	if (!addr_match (nm_setting_tunnel_get_local (s_tunnel), priv->props.local))
+		return FALSE;
+
+	if (!addr_match (nm_setting_tunnel_get_remote (s_tunnel), priv->props.remote))
+		return FALSE;
+
+	if (nm_setting_tunnel_get_ttl (s_tunnel) != priv->props.ttl)
+		return FALSE;
+
+	return TRUE;
+}
+
 /**************************************************************/
 
 static void
 nm_device_gre_init (NMDeviceGre *self)
 {
-}
 
-static void
-constructed (GObject *object)
-{
-	update_properties (NM_DEVICE (object));
-
-	G_OBJECT_CLASS (nm_device_gre_parent_class)->constructed (object);
 }
 
 static void
@@ -179,10 +338,16 @@ nm_device_gre_class_init (NMDeviceGreClass *klass)
 
 	g_type_class_add_private (klass, sizeof (NMDeviceGrePrivate));
 
-	object_class->constructed = constructed;
 	object_class->get_property = get_property;
 
+	device_class->realize = realize;
+	device_class->create_and_realize = create_and_realize;
 	device_class->link_changed = link_changed;
+	device_class->check_connection_compatible = check_connection_compatible;
+	device_class->update_connection = update_connection;
+	device_class->complete_connection = complete_connection;
+
+	device_class->connection_type = NM_SETTING_TUNNEL_SETTING_NAME;
 
 	/* properties */
 	g_object_class_install_property
@@ -275,12 +440,12 @@ create_device (NMDeviceFactory *factory,
 	return (NMDevice *) g_object_new (NM_TYPE_DEVICE_GRE,
 	                                  NM_DEVICE_IFACE, iface,
 	                                  NM_DEVICE_TYPE_DESC, "Gre",
-	                                  NM_DEVICE_DEVICE_TYPE, NM_DEVICE_TYPE_GENERIC,
+	                                  NM_DEVICE_DEVICE_TYPE, NM_DEVICE_TYPE_GRE,
 	                                  NULL);
 }
 
 NM_DEVICE_FACTORY_DEFINE_INTERNAL (GRE, Gre, gre,
-	NM_DEVICE_FACTORY_DECLARE_LINK_TYPES (NM_LINK_TYPE_GRE, NM_LINK_TYPE_GRETAP),
+	NM_DEVICE_FACTORY_DECLARE_LINK_TYPES (NM_LINK_TYPE_GRE, NM_LINK_TYPE_GRETAP)
+	NM_DEVICE_FACTORY_DECLARE_SETTING_TYPES (NM_SETTING_TUNNEL_SETTING_NAME),
 	factory_iface->create_device = create_device;
 	)
-
