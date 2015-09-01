@@ -104,6 +104,7 @@ extern NmcOutputField nmc_fields_setting_bridge_port[];
 extern NmcOutputField nmc_fields_setting_team[];
 extern NmcOutputField nmc_fields_setting_team_port[];
 extern NmcOutputField nmc_fields_setting_dcb[];
+extern NmcOutputField nmc_fields_setting_tun[];
 
 /* Available settings for 'connection show <con>' - profile part */
 static NmcOutputField nmc_fields_settings_names[] = {
@@ -132,6 +133,7 @@ static NmcOutputField nmc_fields_settings_names[] = {
 	SETTING_FIELD (NM_SETTING_TEAM_SETTING_NAME,              nmc_fields_setting_team + 1),              /* 22 */
 	SETTING_FIELD (NM_SETTING_TEAM_PORT_SETTING_NAME,         nmc_fields_setting_team_port + 1),         /* 23 */
 	SETTING_FIELD (NM_SETTING_DCB_SETTING_NAME,               nmc_fields_setting_dcb + 1),               /* 24 */
+	SETTING_FIELD (NM_SETTING_TUN_SETTING_NAME,               nmc_fields_setting_tun + 1),               /* 25 */
 	{NULL, NULL, 0, NULL, NULL, FALSE, FALSE, 0}
 };
 #define NMC_FIELDS_SETTINGS_NAMES_ALL_X  NM_SETTING_CONNECTION_SETTING_NAME","\
@@ -157,7 +159,8 @@ static NmcOutputField nmc_fields_settings_names[] = {
                                          NM_SETTING_BRIDGE_PORT_SETTING_NAME","\
                                          NM_SETTING_TEAM_SETTING_NAME","\
                                          NM_SETTING_TEAM_PORT_SETTING_NAME"," \
-                                         NM_SETTING_DCB_SETTING_NAME
+                                         NM_SETTING_DCB_SETTING_NAME"," \
+                                         NM_SETTING_TUN_SETTING_NAME
 #define NMC_FIELDS_SETTINGS_NAMES_ALL    NMC_FIELDS_SETTINGS_NAMES_ALL_X
 
 /* Active connection data */
@@ -2706,6 +2709,13 @@ static const NameItem nmc_bridge_slave_settings [] = {
 	{ NULL, NULL, NULL, FALSE }
 };
 
+static const NameItem nmc_tun_settings [] = {
+	{ NM_SETTING_CONNECTION_SETTING_NAME, NULL,       NULL, TRUE  },
+	{ NM_SETTING_TUN_SETTING_NAME,        NULL,       NULL, TRUE  },
+	{ NM_SETTING_IP4_CONFIG_SETTING_NAME, NULL,       NULL, FALSE },
+	{ NM_SETTING_IP6_CONFIG_SETTING_NAME, NULL,       NULL, FALSE },
+	{ NULL, NULL, NULL, FALSE }
+};
 
 /* Available connection types */
 static const NameItem nmc_valid_connection_types[] = {
@@ -2728,6 +2738,7 @@ static const NameItem nmc_valid_connection_types[] = {
 	{ "bond-slave",                       NULL,        nmc_bond_slave_settings   },
 	{ "team-slave",                       NULL,        nmc_team_slave_settings   },
 	{ "bridge-slave",                     NULL,        nmc_bridge_slave_settings },
+	{ NM_SETTING_TUN_SETTING_NAME,        NULL,        nmc_tun_settings          },
 	{ NULL, NULL, NULL }
 };
 
@@ -4385,6 +4396,7 @@ complete_connection_by_type (NMConnection *connection,
 	NMSettingBridgePort *s_bridge_port;
 	NMSettingVpn *s_vpn;
 	NMSettingOlpcMesh *s_olpc_mesh;
+	NMSettingTun *s_tun;
 	const char *slave_type;
 
 	g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -5429,7 +5441,27 @@ cleanup_olpc:
 		if (!success)
 			return FALSE;
 
-	} else if (!strcmp (con_type, NM_SETTING_GENERIC_SETTING_NAME)) {
+	} else if (!strcmp (con_type, NM_SETTING_TUN_SETTING_NAME)) {
+		/* Build up the settings required for 'tun' */
+		const char *user = NULL, *group = NULL;
+		nmc_arg_t exp_args[] = { {"tap",     FALSE, NULL,     FALSE},
+		                         {"user",    TRUE,  &user,    FALSE},
+		                         {"group",   TRUE,  &group,   FALSE},
+		                         {NULL} };
+
+		if (!nmc_parse_args (exp_args, FALSE, &argc, &argv, error))
+			return FALSE;
+
+		/* Add 'tun' setting */
+		s_tun = (NMSettingTun *) nm_setting_tun_new ();
+		nm_connection_add_setting (connection, NM_SETTING (s_tun));
+
+		g_object_set (s_tun,
+		              NM_SETTING_TUN_USER,   user,
+		              NM_SETTING_TUN_GROUP,  group,
+		              NM_SETTING_TUN_TAP,    exp_args[0].found,
+		              NULL);
+	}  else if (!strcmp (con_type, NM_SETTING_GENERIC_SETTING_NAME)) {
 		/* Add 'generic' setting */
 		s_generic = (NMSettingGeneric *) nm_setting_generic_new ();
 		nm_connection_add_setting (connection, NM_SETTING (s_generic));

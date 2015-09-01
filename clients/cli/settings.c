@@ -680,8 +680,27 @@ NmcOutputField nmc_fields_setting_dcb[] = {
                                        NM_SETTING_DCB_PRIORITY_TRAFFIC_CLASS
 #define NMC_FIELDS_SETTING_DCB_COMMON  NMC_FIELDS_SETTING_DCB_ALL
 
-/*----------------------------------------------------------------------------*/
+/* Available fields for NM_SETTING_TUN_SETTING_NAME */
+NmcOutputField nmc_fields_setting_tun[] = {
+	SETTING_FIELD ("name",  8),                                  /* 0 */
+	SETTING_FIELD (NM_SETTING_TUN_USER,        40),              /* 1 */
+	SETTING_FIELD (NM_SETTING_TUN_GROUP,       40),              /* 2 */
+	SETTING_FIELD (NM_SETTING_TUN_TAP,         10),              /* 3 */
+	SETTING_FIELD (NM_SETTING_TUN_PI,          10),              /* 4 */
+	SETTING_FIELD (NM_SETTING_TUN_VNET_HDR,    10),              /* 5 */
+	SETTING_FIELD (NM_SETTING_TUN_MULTI_QUEUE, 10),              /* 6 */
+	{NULL, NULL, 0, NULL, FALSE, FALSE, 0}
+};
+#define NMC_FIELDS_SETTING_TUN_ALL     "name"","\
+                                       NM_SETTING_TUN_USER","\
+                                       NM_SETTING_TUN_GROUP","\
+                                       NM_SETTING_TUN_TAP","\
+                                       NM_SETTING_TUN_PI","\
+                                       NM_SETTING_TUN_VNET_HDR","\
+                                       NM_SETTING_TUN_MULTI_QUEUE
+#define NMC_FIELDS_SETTING_TUN_COMMON  NMC_FIELDS_SETTING_TUN_ALL
 
+/*----------------------------------------------------------------------------*/
 static char *
 wep_key_type_to_string (NMWepKeyType type)
 {
@@ -1260,6 +1279,14 @@ DEFINE_GETTER (nmc_property_gsm_get_home_only, NM_SETTING_GSM_HOME_ONLY)
 /* --- NM_SETTING_INFINIBAND_SETTING_NAME property get functions --- */
 DEFINE_GETTER (nmc_property_ib_get_mac_address, NM_SETTING_INFINIBAND_MAC_ADDRESS)
 DEFINE_GETTER (nmc_property_ib_get_transport_mode, NM_SETTING_INFINIBAND_TRANSPORT_MODE)
+
+/* --- NM_SETTING_TUN_SETTING_NAME property get functions --- */
+DEFINE_GETTER (nmc_property_tun_get_user, NM_SETTING_TUN_USER);
+DEFINE_GETTER (nmc_property_tun_get_group, NM_SETTING_TUN_GROUP);
+DEFINE_GETTER (nmc_property_tun_get_tap, NM_SETTING_TUN_TAP);
+DEFINE_GETTER (nmc_property_tun_get_pi, NM_SETTING_TUN_PI);
+DEFINE_GETTER (nmc_property_tun_get_vnet_hdr, NM_SETTING_TUN_VNET_HDR);
+DEFINE_GETTER (nmc_property_tun_get_multi_queue, NM_SETTING_TUN_MULTI_QUEUE);
 
 static char *
 nmc_property_ib_get_mtu (NMSetting *setting, NmcPropertyGetType get_type)
@@ -6685,6 +6712,50 @@ nmc_properties_init (void)
 	                    NULL,
 	                    NULL,
 	                    NULL);
+
+	/* Add editable properties for NM_SETTING_TUN_SETTING_NAME */
+	nmc_add_prop_funcs (GLUE (TUN, USER),
+	                    nmc_property_tun_get_user,
+	                    nmc_property_set_string,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (TUN, GROUP),
+	                    nmc_property_tun_get_group,
+	                    nmc_property_set_string,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (TUN, TAP),
+	                    nmc_property_tun_get_tap,
+	                    nmc_property_set_bool,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (TUN, PI),
+	                    nmc_property_tun_get_pi,
+	                    nmc_property_set_bool,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (TUN, VNET_HDR),
+	                    nmc_property_tun_get_vnet_hdr,
+	                    nmc_property_set_bool,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (TUN, MULTI_QUEUE),
+	                    nmc_property_tun_get_multi_queue,
+	                    nmc_property_set_bool,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
 }
 
 void
@@ -7825,6 +7896,37 @@ setting_dcb_details (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboo
 	return TRUE;
 }
 
+static gboolean
+setting_tun_details (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboolean secrets)
+{
+	NMSettingTun *s_tun = NM_SETTING_TUN (setting);
+	NmcOutputField *tmpl, *arr;
+	size_t tmpl_len;
+
+	g_return_val_if_fail (NM_IS_SETTING_TUN (s_tun), FALSE);
+
+	tmpl = nmc_fields_setting_tun;
+	tmpl_len = sizeof (nmc_fields_setting_tun);
+	nmc->print_fields.indices = parse_output_fields (one_prop ? one_prop : NMC_FIELDS_SETTING_TUN_ALL,
+	                                                 tmpl, FALSE, NULL, NULL);
+	arr = nmc_dup_fields_array (tmpl, tmpl_len, NMC_OF_FLAG_FIELD_NAMES);
+	g_ptr_array_add (nmc->output_data, arr);
+
+	arr = nmc_dup_fields_array (tmpl, tmpl_len, NMC_OF_FLAG_SECTION_PREFIX);
+	set_val_str (arr, 0, g_strdup (nm_setting_get_name (setting)));
+	set_val_str (arr, 1, nmc_property_tun_get_user (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 2, nmc_property_tun_get_group (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 3, nmc_property_tun_get_tap (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 4, nmc_property_tun_get_pi (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 5, nmc_property_tun_get_vnet_hdr (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 6, nmc_property_tun_get_multi_queue (setting, NMC_PROPERTY_GET_PRETTY));
+	g_ptr_array_add (nmc->output_data, arr);
+
+	print_data (nmc);  /* Print all data */
+
+	return TRUE;
+}
+
 typedef struct {
 	const char *sname;
 	gboolean (*func) (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboolean secrets);
@@ -7856,6 +7958,7 @@ static const SettingDetails detail_printers[] = {
 	{ NM_SETTING_TEAM_SETTING_NAME,              setting_team_details },
 	{ NM_SETTING_TEAM_PORT_SETTING_NAME,         setting_team_port_details },
 	{ NM_SETTING_DCB_SETTING_NAME,               setting_dcb_details },
+	{ NM_SETTING_TUN_SETTING_NAME,               setting_tun_details },
 	{ NULL },
 };
 
