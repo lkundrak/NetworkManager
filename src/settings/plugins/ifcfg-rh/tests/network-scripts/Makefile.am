@@ -99,6 +99,8 @@ EXTRA_DIST = \
 	ifcfg-test-vlan-only-vlanid \
 	ifcfg-test-vlan-only-device \
 	ifcfg-test-vlan-physdev \
+	ifcfg-test-vlan-flags-1 \
+	ifcfg-test-vlan-flags-2 \
 	ifcfg-test-wifi-wep-no-keys \
 	ifcfg-test-permissions \
 	ifcfg-test-wifi-wep-agent-keys \

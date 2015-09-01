@@ -4516,6 +4516,7 @@ make_vlan_setting (shvarFile *ifcfg,
 	char *end = NULL;
 	gint vlan_id = -1;
 	guint32 vlan_flags = 0;
+	gint gvrp;
 
 	value = svGetValue (ifcfg, "VLAN_ID", FALSE);
 	if (value) {
@@ -4593,9 +4594,14 @@ make_vlan_setting (shvarFile *ifcfg,
 	if (svTrueValue (ifcfg, "REORDER_HDR", FALSE))
 		vlan_flags |= NM_VLAN_FLAG_REORDER_HEADERS;
 
+	gvrp = svTrueValue (ifcfg, "GVRP", -1);
+	if (gvrp > 0)
+		vlan_flags |= NM_VLAN_FLAG_GVRP;
+
 	value = svGetValue (ifcfg, "VLAN_FLAGS", FALSE);
 	if (value) {
-		if (g_strstr_len (value, -1, "GVRP"))
+		/* Prefer GVRP variable; only take VLAN_FLAG=GVRP when GVRP is not specified */
+		if (g_strstr_len (value, -1, "GVRP") && gvrp == -1)
 			vlan_flags |= NM_VLAN_FLAG_GVRP;
 		if (g_strstr_len (value, -1, "LOOSE_BINDING"))
 			vlan_flags |= NM_VLAN_FLAG_LOOSE_BINDING;
