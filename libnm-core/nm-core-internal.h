@@ -65,6 +65,7 @@
 #include "nm-setting-wireless-security.h"
 #include "nm-setting-wireless.h"
 #include "nm-setting.h"
+#include "nm-setting-ip-tunnel.h"
 #include "nm-simple-connection.h"
 #include "nm-utils.h"
 #include "nm-vpn-dbus-interface.h"
