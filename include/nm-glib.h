@@ -273,5 +273,19 @@ _g_key_file_save_to_file (GKeyFile     *key_file,
 	})
 #endif
 
+static inline gint64
+__g_source_get_ready_time (GSource *source)
+{
+#if !GLIB_CHECK_VERSION(2,36,0)
+	g_return_val_if_fail (source != NULL, -1);
+
+	return source->priv->ready_time;
+#else
+	G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
+	return g_source_get_ready_time (source);
+	G_GNUC_END_IGNORE_DEPRECATIONS;
+#endif
+}
+#define g_source_get_ready_time __g_source_get_ready_time
 
 #endif  /* __NM_GLIB_H__ */

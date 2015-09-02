@@ -70,6 +70,7 @@ _LOG_DECLARE_SELF (NMDevice);
 
 static void nm_device_update_metered (NMDevice *self);
 static void ip_check_ping_watch_cb (GPid pid, gint status, gpointer user_data);
+static void dad_watch_cb (GPid pid, gint status, gpointer user_data);
 static gboolean ip_config_valid (NMDeviceState state);
 static NMActStageReturn dhcp4_start (NMDevice *self, NMConnection *connection, NMDeviceStateReason *reason);
 static gboolean dhcp6_start (NMDevice *self, gboolean wait_for_ll, NMDeviceStateReason *reason);
@@ -171,6 +172,13 @@ typedef struct {
 	const char *address;
 	guint deadline;
 } PingInfo;
+
+typedef struct {
+	GPid pid;
+	guint watch;
+	char *address;
+	gboolean duplicated;
+} DADInfo;
 
 typedef struct {
 	NMDevice *device;
@@ -285,6 +293,8 @@ typedef struct {
 
 	guint           arp_round2_id;
 	PingInfo        gw_ping;
+	guint           dad_timeout_id;
+	GHashTable      *dad_hash;
 
 	/* dnsmasq stuff for shared connections */
 	NMDnsMasqManager *dnsmasq_manager;
@@ -3420,6 +3430,41 @@ dhcp4_cleanup (NMDevice *self, CleanupType cleanup_type, gboolean release)
 	}
 }
 
+static void
+_remove_dup_ips_from_config (NMDevice *self, NMIP4Config *config)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	GHashTableIter iter;
+	DADInfo *dad_info;
+
+	/* DAD is still running */
+	if (priv->dad_timeout_id)
+		return;
+
+	if (!g_hash_table_size (priv->dad_hash))
+		return;
+
+	g_hash_table_iter_init (&iter, priv->dad_hash);
+	while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &dad_info)) {
+		if (dad_info->duplicated) {
+			guint addr;
+			guint i;
+
+			inet_pton (AF_INET, dad_info->address, (void *) &addr);
+
+			for (i = 0; i < nm_ip4_config_get_num_addresses (config); i++) {
+				const NMPlatformIP4Address *a = nm_ip4_config_get_address (config, i);
+				if (addr == a->address) {
+					_LOGD (LOGD_IP4, "removing duplicated address %s", nm_utils_inet4_ntop (a->address, NULL));
+					nm_ip4_config_del_address (config, i);
+					break;
+				}
+			}
+		}
+	}
+	g_hash_table_remove_all (priv->dad_hash);
+}
+
 static gboolean
 ip4_config_merge_and_apply (NMDevice *self,
                             NMIP4Config *config,
@@ -3481,8 +3526,12 @@ ip4_config_merge_and_apply (NMDevice *self,
 
 	/* Merge user overrides into the composite config. For assumed connections,
 	 * con_ip4_config is empty. */
-	if (priv->con_ip4_config)
-		nm_ip4_config_merge (composite, priv->con_ip4_config, NM_IP_CONFIG_MERGE_DEFAULT);
+	if (priv->con_ip4_config) {
+		/* Remove IP duplicates from con_ip4_config detected by arping */
+		_remove_dup_ips_from_config (self, priv->con_ip4_config);
+		if (!priv->dad_timeout_id)
+			nm_ip4_config_merge (composite, priv->con_ip4_config, NM_IP_CONFIG_MERGE_DEFAULT);
+	}
 
 
 	/* Add the default route.
@@ -5814,15 +5863,63 @@ start_sharing (NMDevice *self, NMIP4Config *config)
 }
 
 static void
-send_arps (NMDevice *self, const char *mode_arg)
+send_arps_announce (NMDevice *self, const char *mode_arg)
 {
 	const char *argv[] = { NULL, mode_arg, "-q", "-I", nm_device_get_ip_iface (self), "-c", "1", NULL, NULL };
 	int ip_arg = G_N_ELEMENTS (argv) - 2;
-	NMConnection *connection;
-	NMSettingIPConfig *s_ip4;
+	int i, num;
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	GError *error = NULL;
+
+	if (!priv->con_ip4_config)
+		return;
+	num = nm_ip4_config_get_num_addresses (priv->con_ip4_config);
+	if (num == 0)
+		return;
+
+	argv[0] = nm_utils_find_helper ("arping", NULL, NULL);
+	if (!argv[0]) {
+		_LOGW (LOGD_DEVICE | LOGD_IP4, "arping could not be found; no ARPs will be sent");
+		return;
+	}
+
+	for (i = 0; i < num; i++) {
+		gs_free char *tmp_str = NULL;
+		gboolean success;
+		const NMPlatformIP4Address *a = nm_ip4_config_get_address (priv->con_ip4_config, i);
+
+		argv[ip_arg] = nm_utils_inet4_ntop (a->address, NULL);
+
+		_LOGD (LOGD_DEVICE | LOGD_IP4,
+		       "arping: run %s", (tmp_str = g_strjoinv (" ", (char **) argv)));
+		success = g_spawn_async (NULL, (char **) argv, NULL,
+		                         G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+		                         NULL, NULL, NULL, &error);
+		if (!success) {
+			_LOGW (LOGD_DEVICE | LOGD_IP4,
+			       "arping: could not send ARP for local address %s: %s",
+			       argv[ip_arg], error->message);
+			g_clear_error (&error);
+		}
+	}
+}
+
+static void
+send_arps_dad (NMDevice *self, guint timeout)
+{
+	const char *argv[] = { NULL, "-D", "-q", "-I", nm_device_get_ip_iface (self), "-c", NULL, "-w", NULL, NULL, NULL };
+	int c_arg = 6;
+	int w_arg = 8;
+	int ip_arg = G_N_ELEMENTS (argv) - 2;
+	DADInfo *dad_info;
+	GPid pid;
 	int i, num;
 	NMIPAddress *addr;
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	NMConnection *connection;
+	NMSettingIPConfig *s_ip4;
 	GError *error = NULL;
+	gs_free char *tmp_timeout = NULL;
 
 	connection = nm_device_get_connection (self);
 	if (!connection)
@@ -5840,6 +5937,7 @@ send_arps (NMDevice *self, const char *mode_arg)
 		return;
 	}
 
+	argv[c_arg] = argv[w_arg] = tmp_timeout = g_strdup_printf ("%u", timeout + 5);
 	for (i = 0; i < num; i++) {
 		gs_free char *tmp_str = NULL;
 		gboolean success;
@@ -5850,9 +5948,16 @@ send_arps (NMDevice *self, const char *mode_arg)
 		_LOGD (LOGD_DEVICE | LOGD_IP4,
 		       "arping: run %s", (tmp_str = g_strjoinv (" ", (char **) argv)));
 		success = g_spawn_async (NULL, (char **) argv, NULL,
-		                         G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
-		                         NULL, NULL, NULL, &error);
-		if (!success) {
+		                         G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_DO_NOT_REAP_CHILD,
+		                         NULL, NULL, &pid, &error);
+		if (success) {
+			dad_info = g_new (DADInfo, 1);
+			dad_info->pid = pid;
+			dad_info->watch = g_child_watch_add (pid, dad_watch_cb, self);
+			dad_info->address = strdup (argv[ip_arg]);
+			dad_info->duplicated = FALSE;
+			g_hash_table_insert (priv->dad_hash, GINT_TO_POINTER (pid), dad_info);
+		} else {
 			_LOGW (LOGD_DEVICE | LOGD_IP4,
 			       "arping: could not send ARP for local address %s: %s",
 			       argv[ip_arg], error->message);
@@ -5870,7 +5975,7 @@ arp_announce_round2 (gpointer self)
 
 	if (   priv->state >= NM_DEVICE_STATE_IP_CONFIG
 	    && priv->state <= NM_DEVICE_STATE_ACTIVATED)
-		send_arps (self, "-U");
+		send_arps_announce (self, "-U");
 
 	return G_SOURCE_REMOVE;
 }
@@ -5890,26 +5995,16 @@ static void
 arp_announce (NMDevice *self)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
-	NMConnection *connection;
-	NMSettingIPConfig *s_ip4;
-	int num;
 
 	arp_cleanup (self);
 
 	/* We only care about manually-configured addresses; DHCP- and autoip-configured
 	 * ones should already have been seen on the network at this point.
 	 */
-	connection = nm_device_get_connection (self);
-	if (!connection)
-		return;
-	s_ip4 = nm_connection_get_setting_ip4_config (connection);
-	if (!s_ip4)
-		return;
-	num = nm_setting_ip_config_get_num_addresses (s_ip4);
-	if (num == 0)
+	if (!nm_ip4_config_get_num_addresses (priv->con_ip4_config))
 		return;
 
-	send_arps (self, "-A");
+	send_arps_announce (self, "-A");
 	priv->arp_round2_id = g_timeout_add_seconds (2, arp_announce_round2, self);
 }
 
@@ -5974,7 +6069,6 @@ nm_device_activate_ip4_config_commit (gpointer user_data)
 		                    NULL,
 		                    NULL);
 	}
-
 	arp_announce (self);
 
 	/* Enter the IP_CHECK state if this is the first method to complete */
@@ -6008,10 +6102,143 @@ nm_device_queued_ip_config_change_clear (NMDevice *self)
 	}
 }
 
+static void
+dad_stop_pending (NMDevice *self)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	GHashTableIter iter;
+	DADInfo *dad_info;
+
+	g_hash_table_iter_init (&iter, priv->dad_hash);
+	while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &dad_info)) {
+		if (dad_info->pid) {
+			nm_utils_kill_child_async (dad_info->pid, SIGTERM, LOGD_IP4, "arping", 1000, NULL, NULL);
+			dad_info->pid = 0;
+		}
+		nm_clear_g_source (&dad_info->watch);
+	}
+}
+
+static void
+dad_cleanup (NMDevice *self)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	dad_stop_pending (self);
+	g_hash_table_remove_all (priv->dad_hash);
+	nm_clear_g_source (&priv->dad_timeout_id);
+}
+
+static gboolean
+dad_ended_cb (gpointer user_data)
+{
+	NMDevice *self = NM_DEVICE (user_data);
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	_LOGD (LOGD_IP4, "DAD finished");
+
+	priv->dad_timeout_id = 0;
+
+	dad_stop_pending (self);
+
+	return G_SOURCE_REMOVE;
+}
+
+static void
+dad_watch_cb (GPid pid, gint status, gpointer user_data)
+{
+	NMDevice *self = NM_DEVICE (user_data);
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	DADInfo *found;
+	GHashTableIter iter;
+	gboolean all_done = TRUE;
+
+	found = g_hash_table_lookup (priv->dad_hash, GINT_TO_POINTER (pid));
+	if (!found)
+		return;
+	found->watch = 0;
+	found->pid = 0;
+
+	if (WIFEXITED (status)) {
+		if (WEXITSTATUS (status) != 0) {
+			_LOGW (LOGD_IP4, "DAD: %s already used in the network; the IP will not be configured",
+			       found->address);
+			found->duplicated = TRUE;
+		} else
+			_LOGD (LOGD_IP4, "DAD succeeded for %s", found->address);
+	} else
+		_LOGW (LOGD_IP4, "DAD: arping stopped unexpectedly with status %d for %s",
+		       status, found->address);
+
+	/* Check if all arpings have been processed to be able to end before timeout */
+	g_hash_table_iter_init (&iter, priv->dad_hash);
+	while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &found)) {
+		if (found->watch) {
+			all_done = FALSE;
+			break;
+		}
+	}
+	if (all_done)
+		dad_ended_cb (self);
+}
+
+static gboolean
+start_dad (NMDevice *self)
+{
+	NMConnection *connection;
+	NMSettingIPConfig *s_ip4;
+	gs_free char *value = NULL;
+	gint timeout;
+
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	connection = nm_device_get_connection (self);
+	if (!connection)
+		return FALSE;
+	if (nm_device_uses_assumed_connection (self))
+		return FALSE;
+	s_ip4 = nm_connection_get_setting_ip4_config (connection);
+	if (!s_ip4 || !nm_setting_ip_config_get_num_addresses (s_ip4))
+		return FALSE;
+
+	timeout = nm_setting_ip4_config_get_dad_timeout (NM_SETTING_IP4_CONFIG (s_ip4));
+
+	if (timeout == 0) {
+		value = nm_config_data_get_connection_default (NM_CONFIG_GET_DATA,
+		                                               "ipv4.dad-timeout", self);
+		/* Use 3 seconds timeout by default */
+		timeout = _nm_utils_ascii_str_to_int64 (value, 10, -1, NM_SETTING_IP4_CONFIG_DAD_TIMEOUT_MAX, 3);
+		timeout = timeout == 0 ? 3 : timeout;
+	}
+	if (timeout == -1)
+		return FALSE;
+
+	nm_clear_g_source (&priv->dad_timeout_id);
+	priv->dad_timeout_id = g_timeout_add_seconds (timeout, dad_ended_cb, self);
+	send_arps_dad (self, timeout);
+	return TRUE;
+}
+
+static gboolean
+ip4_config_commit_wait_for_dad_cb (gpointer user_data)
+{
+	NMDevice *self = NM_DEVICE (user_data);
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	if (!priv->dad_timeout_id) {
+		activation_source_schedule (self, nm_device_activate_ip4_config_commit, AF_INET);
+		_LOGD (LOGD_DEVICE | LOGD_IP4, "Activation: Stage 5 of 5 (IPv4 Configure Commit) scheduled...");
+		return G_SOURCE_REMOVE;
+	}
+	return G_SOURCE_CONTINUE;
+}
+
 void
 nm_device_activate_schedule_ip4_config_result (NMDevice *self, NMIP4Config *config)
 {
 	NMDevicePrivate *priv;
+	GSource *source;
+	gint64 time = 0, wait;
 
 	g_return_if_fail (NM_IS_DEVICE (self));
 	priv = NM_DEVICE_GET_PRIVATE (self);
@@ -6021,9 +6248,20 @@ nm_device_activate_schedule_ip4_config_result (NMDevice *self, NMIP4Config *conf
 		priv->dev_ip4_config = g_object_ref (config);
 
 	nm_device_queued_ip_config_change_clear (self);
-	activation_source_schedule (self, nm_device_activate_ip4_config_commit, AF_INET);
 
-	_LOGD (LOGD_DEVICE | LOGD_IP4, "Activation: Stage 5 of 5 (IPv4 Configure Commit) scheduled...");
+	/* If DAD already ended, proceed right away, else wait for DAD to finish */
+	if (!priv->dad_timeout_id) {
+		activation_source_schedule (self, nm_device_activate_ip4_config_commit, AF_INET);
+		_LOGD (LOGD_DEVICE | LOGD_IP4, "Activation: Stage 5 of 5 (IPv4 Configure Commit) scheduled...");
+	} else {
+		source = g_main_context_find_source_by_id (g_main_context_default (), priv->dad_timeout_id);
+		if (source)
+			time = g_source_get_ready_time (source);
+		wait = (time - g_get_monotonic_time ()) / 1000;
+		wait = wait > 0 ? wait + 200 : 200;
+
+		g_timeout_add (wait, ip4_config_commit_wait_for_dad_cb, self);
+	}
 }
 
 gboolean
@@ -6429,6 +6667,9 @@ _device_activate (NMDevice *self, NMActRequest *req)
 	 * changing state to PREPARE so that the two properties change together.
 	 */
 	priv->act_request = g_object_ref (req);
+
+	/* Kick off DAD if required */
+	start_dad (self);
 
 	nm_device_activate_schedule_stage1_device_prepare (self);
 	return TRUE;
@@ -7077,6 +7318,7 @@ start_ping (NMDevice *self,
 	ip_check_gw_ping_cleanup (self);
 	return FALSE;
 }
+
 
 static void
 nm_device_start_ip_check (NMDevice *self)
@@ -8171,6 +8413,9 @@ _cancel_activation (NMDevice *self)
 		priv->fw_call = NULL;
 	}
 
+	/* Clear all DAD records */
+	dad_cleanup (self);
+
 	ip_check_gw_ping_cleanup (self);
 
 	/* Break the activation chain */
@@ -9147,6 +9392,15 @@ spec_match_list (NMDevice *self, const GSList *specs)
 	return matched;
 }
 
+static void
+destroy_dad_info (gpointer data)
+{
+	DADInfo *info = (DADInfo *) data;
+
+	g_free (info->address);
+	g_free (info);
+}
+
 /***********************************************************/
 
 #define DEFAULT_AUTOCONNECT TRUE
@@ -9166,6 +9420,7 @@ nm_device_init (NMDevice *self)
 	priv->unmanaged_flags = NM_UNMANAGED_INTERNAL;
 	priv->available_connections = g_hash_table_new_full (g_direct_hash, g_direct_equal, g_object_unref, NULL);
 	priv->ip6_saved_properties = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
+	priv->dad_hash = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, destroy_dad_info);
 
 	priv->default_route.v4_is_assumed = TRUE;
 	priv->default_route.v6_is_assumed = TRUE;
@@ -9311,6 +9566,7 @@ finalize (GObject *object)
 
 	g_hash_table_unref (priv->ip6_saved_properties);
 	g_hash_table_unref (priv->available_connections);
+	g_hash_table_unref (priv->dad_hash);
 
 	G_OBJECT_CLASS (nm_device_parent_class)->finalize (object);
 }
