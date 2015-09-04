@@ -35,6 +35,7 @@ libnminclude_hfiles =			\
 	nm-device-bt.h			\
 	nm-device-ethernet.h		\
 	nm-device-generic.h		\
+	nm-device-gre.h			\
 	nm-device-infiniband.h		\
 	nm-device-modem.h		\
 	nm-device-olpc-mesh.h		\
@@ -86,6 +87,7 @@ libnm_la_csources =			\
 	nm-device-bt.c			\
 	nm-device-ethernet.c		\
 	nm-device-generic.c		\
+	nm-device-gre.c			\
 	nm-device-infiniband.c		\
 	nm-device-modem.c		\
 	nm-device-olpc-mesh.c		\

@@ -144,6 +144,7 @@ typedef enum {
  * @NM_DEVICE_TYPE_ADSL: ADSL modem
  * @NM_DEVICE_TYPE_BRIDGE: a bridge master interface
  * @NM_DEVICE_TYPE_TEAM: a team master interface
+ * @NM_DEVICE_TYPE_GRE: a GRE tunnel interface
  *
  * #NMDeviceType values indicate the type of hardware represented by
  * an #NMDevice.
@@ -167,6 +168,7 @@ typedef enum {
 	NM_DEVICE_TYPE_BRIDGE     = 13,
 	NM_DEVICE_TYPE_GENERIC    = 14,
 	NM_DEVICE_TYPE_TEAM       = 15,
+	NM_DEVICE_TYPE_GRE        = 16,
 } NMDeviceType;
 
 /**

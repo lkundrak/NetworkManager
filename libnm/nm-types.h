@@ -36,6 +36,7 @@ typedef struct _NMDeviceBridge      NMDeviceBridge;
 typedef struct _NMDeviceBt          NMDeviceBt;
 typedef struct _NMDeviceEthernet    NMDeviceEthernet;
 typedef struct _NMDeviceGeneric     NMDeviceGeneric;
+typedef struct _NMDeviceGre         NMDeviceGre;
 typedef struct _NMDeviceInfiniband  NMDeviceInfiniband;
 typedef struct _NMDeviceModem       NMDeviceModem;
 typedef struct _NMDeviceOlpcMesh    NMDeviceOlpcMesh;
