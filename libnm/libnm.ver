@@ -860,6 +860,13 @@ global:
 	nm_access_point_get_last_seen;
 	nm_device_get_metered;
 	nm_device_get_nm_plugin_missing;
+	nm_device_tun_get_group;
+	nm_device_tun_get_mode;
+	nm_device_tun_get_multi_queue;
+	nm_device_tun_get_pi;
+	nm_device_tun_get_type;
+	nm_device_tun_get_user;
+	nm_device_tun_get_vnet_hdr;
 	nm_device_wifi_request_scan_options;
 	nm_device_wifi_request_scan_options_async;
 	nm_metered_get_type;
