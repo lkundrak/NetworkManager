@@ -58,11 +58,13 @@ NM_SETTING_REGISTER_TYPE (NM_TYPE_SETTING_IP4_CONFIG)
 
 typedef struct {
 	char *dhcp_client_id;
+	gint dad_timeout;
 } NMSettingIP4ConfigPrivate;
 
 enum {
 	PROP_0,
 	PROP_DHCP_CLIENT_ID,
+	PROP_DAD_TIMEOUT,
 
 	LAST_PROP
 };
@@ -96,6 +98,22 @@ nm_setting_ip4_config_get_dhcp_client_id (NMSettingIP4Config *setting)
 	g_return_val_if_fail (NM_IS_SETTING_IP4_CONFIG (setting), NULL);
 
 	return NM_SETTING_IP4_CONFIG_GET_PRIVATE (setting)->dhcp_client_id;
+}
+
+/**
+ * nm_setting_ip4_config_get_dad_timeout:
+ * @setting: the #NMSettingIP4Config
+ *
+ * Returns: the #NMSettingIP4Config:dad-timeout property.
+ *
+ * Since: 1.2
+ **/
+gint
+nm_setting_ip4_config_get_dad_timeout (NMSettingIP4Config *setting)
+{
+	g_return_val_if_fail (NM_IS_SETTING_IP4_CONFIG (setting), 0);
+
+	return NM_SETTING_IP4_CONFIG_GET_PRIVATE (setting)->dad_timeout;
 }
 
 static gboolean
@@ -208,6 +226,9 @@ set_property (GObject *object, guint prop_id,
 		g_free (priv->dhcp_client_id);
 		priv->dhcp_client_id = g_value_dup_string (value);
 		break;
+	case PROP_DAD_TIMEOUT:
+		priv->dad_timeout = g_value_get_int (value);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -223,6 +244,9 @@ get_property (GObject *object, guint prop_id,
 	switch (prop_id) {
 	case PROP_DHCP_CLIENT_ID:
 		g_value_set_string (value, nm_setting_ip4_config_get_dhcp_client_id (s_ip4));
+		break;
+	case PROP_DAD_TIMEOUT:
+		g_value_set_int (value, nm_setting_ip4_config_get_dad_timeout (s_ip4));
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -598,6 +622,25 @@ nm_setting_ip4_config_class_init (NMSettingIP4ConfigClass *ip4_class)
 		                      NULL,
 		                      G_PARAM_READWRITE |
 		                      G_PARAM_STATIC_STRINGS));
+
+	/**
+	 * NMSettingIP4Config:dad-timout:
+	 *
+	 * Timeout to delay configuring static IP addresses until they are checked
+	 * to be unique in the network. Duplicated addresses will not be set up.
+	 * Value of -1 means that no duplicate address detection is performed,
+	 * 0 means the default value (either configuration ipv4.dad-timeout
+	 * override or 3 seconds). Value greater than zero is a timeout in seconds.
+	 *
+	 * Since: 1.2
+	 **/
+	g_object_class_install_property
+		(object_class, PROP_DAD_TIMEOUT,
+		 g_param_spec_int (NM_SETTING_IP4_CONFIG_DAD_TIMEOUT, "", "",
+		                    -1, NM_SETTING_IP4_CONFIG_DAD_TIMEOUT_MAX, 0,
+		                    G_PARAM_READWRITE |
+		                    NM_SETTING_PARAM_FUZZY_IGNORE |
+		                    G_PARAM_STATIC_STRINGS));
 
 	/* IP4-specific property overrides */
 
