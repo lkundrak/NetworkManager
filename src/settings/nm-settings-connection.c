@@ -893,6 +893,85 @@ new_secrets_commit_cb (NMSettingsConnection *self,
 }
 
 static void
+get_cmp_flags (NMSettingsConnection *self, /* only needed for logging */
+               GetSecretsInfo *info, /* only needed for logging */
+               NMConnection *connection,
+               const char *agent_dbus_owner,
+               gboolean agent_has_modify,
+               const char *setting_name, /* only needed for logging */
+               NMSecretAgentGetSecretsFlags flags,
+               GVariant *secrets,
+               gboolean *agent_had_system,
+               ForEachSecretFlags *cmp_flags)
+{
+	gboolean is_self = (((NMConnection *) self) == connection);
+
+	g_return_if_fail (secrets);
+
+	cmp_flags->required = NM_SETTING_SECRET_FLAG_NONE;
+	cmp_flags->forbidden = NM_SETTING_SECRET_FLAG_NONE;
+
+	*agent_had_system = FALSE;
+
+	if (agent_dbus_owner) {
+		if (is_self) {
+			_LOGD ("(%s:%p) secrets returned from agent %s",
+			       setting_name,
+			       info,
+			       agent_dbus_owner);
+		}
+
+		/* If the agent returned any system-owned secrets (initial connect and no
+		 * secrets given when the connection was created, or something like that)
+		 * make sure the agent's UID has the 'modify' permission before we use or
+		 * save those system-owned secrets.  If not, discard them and use the
+		 * existing secrets, or fail the connection.
+		 */
+		*agent_had_system = find_secret (connection, secrets, secret_is_system_owned, NULL);
+		if (*agent_had_system) {
+			if (flags == NM_SECRET_AGENT_GET_SECRETS_FLAG_NONE) {
+				/* No user interaction was allowed when requesting secrets; the
+				 * agent is being bad.  Remove system-owned secrets.
+				 */
+				if (is_self) {
+					_LOGD ("(%s:%p) interaction forbidden but agent %s returned system secrets",
+					       setting_name,
+					       info,
+					       agent_dbus_owner);
+				}
+
+				cmp_flags->required |= NM_SETTING_SECRET_FLAG_AGENT_OWNED;
+			} else if (agent_has_modify == FALSE) {
+				/* Agent didn't successfully authenticate; clear system-owned secrets
+				 * from the secrets the agent returned.
+				 */
+				if (is_self) {
+					_LOGD ("(%s:%p) agent failed to authenticate but provided system secrets",
+					       setting_name,
+					       info);
+				}
+
+				cmp_flags->required |= NM_SETTING_SECRET_FLAG_AGENT_OWNED;
+			}
+		}
+	} else {
+		if (is_self) {
+			_LOGD ("(%s:%p) existing secrets returned",
+			       setting_name,
+			       info);
+		}
+	}
+
+	/* If no user interaction was allowed, make sure that no "unsaved" secrets
+	 * came back.  Unsaved secrets by definition require user interaction.
+	 */
+	if (flags == NM_SECRET_AGENT_GET_SECRETS_FLAG_NONE) {
+		cmp_flags->forbidden |= (  NM_SETTING_SECRET_FLAG_NOT_SAVED
+		                         | NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
+	}
+}
+
+static void
 get_secrets_done_cb (NMAgentManager *manager,
                      NMAgentManagerCallId call_id_a,
                      const char *agent_dbus_owner,
@@ -936,7 +1015,7 @@ get_secrets_done_cb (NMAgentManager *manager,
 	if (   info->had_applied_connection
 	    && !info->applied_connection) {
 		g_set_error_literal (&local, NM_CONNECTION_ERROR, NM_CONNECTION_ERROR_SETTING_NOT_FOUND,
-		                     "Applied connection deleted in the mean time");
+		                     "Applied connection deleted since requesting secrets");
 		_get_secrets_info_callback (info, NULL, setting_name, local);
 		goto out;
 	}
@@ -957,61 +1036,20 @@ get_secrets_done_cb (NMAgentManager *manager,
 		goto out;
 	}
 
-	applied_connection = info->applied_connection;
-
-	g_assert (secrets);
-	if (agent_dbus_owner) {
-		_LOGD ("(%s:%p) secrets returned from agent %s",
-		       setting_name,
-		       info,
-		       agent_dbus_owner);
-
-		/* If the agent returned any system-owned secrets (initial connect and no
-		 * secrets given when the connection was created, or something like that)
-		 * make sure the agent's UID has the 'modify' permission before we use or
-		 * save those system-owned secrets.  If not, discard them and use the
-		 * existing secrets, or fail the connection.
-		 */
-		agent_had_system = find_secret (NM_CONNECTION (self), secrets, secret_is_system_owned, NULL);
-		if (agent_had_system) {
-			if (flags == NM_SECRET_AGENT_GET_SECRETS_FLAG_NONE) {
-				/* No user interaction was allowed when requesting secrets; the
-				 * agent is being bad.  Remove system-owned secrets.
-				 */
-				_LOGD ("(%s:%p) interaction forbidden but agent %s returned system secrets",
-				       setting_name,
-				       info,
-				       agent_dbus_owner);
-
-				cmp_flags.required |= NM_SETTING_SECRET_FLAG_AGENT_OWNED;
-			} else if (agent_has_modify == FALSE) {
-				/* Agent didn't successfully authenticate; clear system-owned secrets
-				 * from the secrets the agent returned.
-				 */
-				_LOGD ("(%s:%p) agent failed to authenticate but provided system secrets",
-				       setting_name,
-				       info);
-
-				cmp_flags.required |= NM_SETTING_SECRET_FLAG_AGENT_OWNED;
-			}
-		}
-	} else {
-		_LOGD ("(%s:%p) existing secrets returned",
-		       setting_name,
-		       info);
-	}
+	get_cmp_flags (self,
+	               info,
+	               NM_CONNECTION (self),
+	               agent_dbus_owner,
+	               agent_has_modify,
+	               setting_name,
+	               flags,
+	               secrets,
+	               &agent_had_system,
+	               &cmp_flags);
 
 	_LOGD ("(%s:%p) secrets request completed",
 	       setting_name,
 	       info);
-
-	/* If no user interaction was allowed, make sure that no "unsaved" secrets
-	 * came back.  Unsaved secrets by definition require user interaction.
-	 */
-	if (flags == NM_SECRET_AGENT_GET_SECRETS_FLAG_NONE) {
-		cmp_flags.forbidden |= (  NM_SETTING_SECRET_FLAG_NOT_SAVED
-		                        | NM_SETTING_SECRET_FLAG_NOT_REQUIRED);
-	}
 
 	dict = nm_connection_to_dbus (priv->system_secrets, NM_CONNECTION_SERIALIZE_ONLY_SECRETS);
 
@@ -1027,7 +1065,7 @@ get_secrets_done_cb (NMAgentManager *manager,
 		 */
 		filtered_secrets = for_each_secret (NM_CONNECTION (self), secrets, TRUE, validate_secret_flags, &cmp_flags);
 		if (nm_connection_update_secrets (NM_CONNECTION (self), setting_name, filtered_secrets, &local)) {
-			/* Now that all secrets are updated, copy and cache new secrets, 
+			/* Now that all secrets are updated, copy and cache new secrets,
 			 * then save them to backing storage.
 			 */
 			update_system_secrets_cache (self);
@@ -1066,14 +1104,26 @@ get_secrets_done_cb (NMAgentManager *manager,
 		       (local && local->message) ? local->message : "(unknown)");
 	}
 
+	applied_connection = info->applied_connection;
 	if (applied_connection) {
+		get_cmp_flags (self,
+		               info,
+		               applied_connection,
+		               agent_dbus_owner,
+		               agent_has_modify,
+		               setting_name,
+		               flags,
+		               secrets,
+		               &agent_had_system,
+		               &cmp_flags);
+
 		nm_connection_clear_secrets (applied_connection);
 
 		if (!dict || nm_connection_update_secrets (applied_connection, setting_name, dict, NULL)) {
 			GVariant *filtered_secrets;
 
 			filtered_secrets = for_each_secret (applied_connection, secrets, TRUE, validate_secret_flags, &cmp_flags);
-			nm_connection_update_secrets (NM_CONNECTION (self), setting_name, filtered_secrets, NULL);
+			nm_connection_update_secrets (applied_connection, setting_name, filtered_secrets, NULL);
 			g_variant_unref (filtered_secrets);
 		}
 	}
@@ -1149,6 +1199,9 @@ nm_settings_connection_get_secrets (NMSettingsConnection *self,
 	GError *local = NULL;
 
 	g_return_val_if_fail (NM_IS_SETTINGS_CONNECTION (self), NULL);
+	g_return_val_if_fail (   !applied_connection
+	                      || (   NM_IS_CONNECTION (applied_connection)
+	                          && (((NMConnection *) self) != applied_connection)), NULL);
 
 	info = _get_secrets_info_new (self,
 	                              applied_connection,

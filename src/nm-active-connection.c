@@ -283,6 +283,7 @@ nm_active_connection_set_settings_connection (NMActiveConnection *self,
 
 	priv->settings_connection = g_object_ref (connection);
 	priv->applied_connection = nm_simple_connection_new_clone (NM_CONNECTION (priv->settings_connection));
+	nm_connection_clear_secrets (priv->applied_connection);
 }
 
 /*******************************************************************/
@@ -806,6 +807,7 @@ set_property (GObject *object, guint prop_id,
 		if (con) {
 			priv->settings_connection = g_object_ref (con);
 			priv->applied_connection = nm_simple_connection_new_clone (NM_CONNECTION (con));
+			nm_connection_clear_secrets (priv->applied_connection);
 		}
 		break;
 	case PROP_INT_DEVICE:

@@ -271,7 +271,7 @@ clear_secrets_tries (NMDevice *device)
 
 	req = nm_device_get_act_request (device);
 	if (req) {
-		connection = nm_act_request_get_settings_connection (req);
+		connection = nm_act_request_get_applied_connection (req);
 		/* Clear wired secrets tries on success, failure, or when deactivating */
 		g_object_set_data (G_OBJECT (connection), WIRED_SECRETS_TRIES, NULL);
 	}
@@ -510,7 +510,7 @@ link_timeout_cb (gpointer user_data)
 	NMDeviceEthernetPrivate *priv = NM_DEVICE_ETHERNET_GET_PRIVATE (self);
 	NMDevice *dev = NM_DEVICE (self);
 	NMActRequest *req;
-	NMSettingsConnection *connection;
+	NMConnection *applied_connection;
 	const char *setting_name;
 
 	priv->supplicant_timeout_id = 0;
@@ -531,9 +531,9 @@ link_timeout_cb (gpointer user_data)
 	if (nm_device_get_state (dev) != NM_DEVICE_STATE_CONFIG)
 		goto time_out;
 
-	connection = nm_act_request_get_settings_connection (req);
-	nm_connection_clear_secrets (NM_CONNECTION (connection));
-	setting_name = nm_connection_need_secrets (NM_CONNECTION (connection), NULL);
+	applied_connection = nm_act_request_get_applied_connection (req);
+	nm_connection_clear_secrets (applied_connection);
+	setting_name = nm_connection_need_secrets (applied_connection, NULL);
 	if (!setting_name)
 		goto time_out;
 
