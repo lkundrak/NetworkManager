@@ -111,6 +111,28 @@ static const uint8_t default_req_opts[] = {
         DHCP_OPTION_NTP_SERVER,
 };
 
+static int dhcp_domain_to_wire_format(const char *hostname, uint8_t *buffer) {
+        uint8_t *start;
+        int i, len;
+
+        memcpy(buffer + 1, hostname, strlen(hostname) + 1);
+
+        start = buffer;
+        for (i = 1; ; i++) {
+                if (buffer[i] == '.' || buffer[i] == 0) {
+                        len = &buffer[i] - start - 1;
+                        if (len < 1 || len > 63)
+                                return -EINVAL;
+                        *start = len;
+                        start = &buffer[i];
+                        if (buffer[i] == 0)
+                                break;
+                }
+        }
+
+        return 0;
+}
+
 static int client_receive_message_raw(sd_event_source *s, int fd,
                                       uint32_t revents, void *userdata);
 static int client_receive_message_udp(sd_event_source *s, int fd,
@@ -583,9 +605,25 @@ static int client_send_discover(sd_dhcp_client *client) {
            DHCPDISCOVER but dhclient does and so we do as well
         */
         if (client->hostname) {
-                r = dhcp_option_append(&discover->dhcp, optlen, &optoffset, 0,
-                                       DHCP_OPTION_HOST_NAME,
-                                       strlen(client->hostname), client->hostname);
+                if (strchr(client->hostname, '.')) {
+                        uint8_t *fqdn;
+                        size_t len;
+
+                        len = strlen(client->hostname);
+                        fqdn = alloca(5 + len);
+                        fqdn[0] = DHCP_FQDN_FLAG_S | DHCP_FQDN_FLAG_E;
+                        fqdn[1] = 0;
+                        fqdn[2] = 0;
+                        r = dhcp_domain_to_wire_format(client->hostname, fqdn + 3);
+                        if (r == 0) {
+                                r = dhcp_option_append(&discover->dhcp, optlen, &optoffset, 0,
+                                                       DHCP_OPTION_FQDN, 5 + len, fqdn);
+                        }
+                } else {
+                        r = dhcp_option_append(&discover->dhcp, optlen, &optoffset, 0,
+                                               DHCP_OPTION_HOST_NAME,
+                                               strlen(client->hostname), client->hostname);
+                }
                 if (r < 0)
                         return r;
         }
@@ -691,9 +729,25 @@ static int client_send_request(sd_dhcp_client *client) {
         }
 
         if (client->hostname) {
-                r = dhcp_option_append(&request->dhcp, optlen, &optoffset, 0,
-                                       DHCP_OPTION_HOST_NAME,
-                                       strlen(client->hostname), client->hostname);
+                if (strchr(client->hostname, '.')) {
+                        uint8_t *fqdn;
+                        size_t len;
+
+                        len = strlen(client->hostname);
+                        fqdn = alloca(5 + len);
+                        fqdn[0] = DHCP_FQDN_FLAG_S | DHCP_FQDN_FLAG_E;
+                        fqdn[1] = 0;
+                        fqdn[2] = 0;
+                        r = dhcp_domain_to_wire_format(client->hostname, fqdn + 3);
+                        if (r == 0) {
+                                r = dhcp_option_append(&request->dhcp, optlen, &optoffset, 0,
+                                                       DHCP_OPTION_FQDN, 5 + len, fqdn);
+                        }
+                } else {
+                        r = dhcp_option_append(&request->dhcp, optlen, &optoffset, 0,
+                                               DHCP_OPTION_HOST_NAME,
+                                               strlen(client->hostname), client->hostname);
+                }
                 if (r < 0)
                         return r;
         }
