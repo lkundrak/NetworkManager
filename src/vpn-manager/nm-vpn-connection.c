@@ -2068,8 +2068,12 @@ get_secrets_cb (NMSettingsConnection *connection,
                 gpointer user_data)
 {
 	NMVpnConnection *self = NM_VPN_CONNECTION (user_data);
-	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
+	NMVpnConnectionPrivate *priv;
 	GVariant *dict;
+
+	g_return_if_fail (NM_IS_VPN_CONNECTION (self));
+
+	priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
 
 	g_return_if_fail (connection && connection == _get_settings_connection (self, FALSE));
 	g_return_if_fail (call_id == priv->secrets_id);
@@ -2078,14 +2082,6 @@ get_secrets_cb (NMSettingsConnection *connection,
 
 	if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
 		return;
-
-	if (   !error
-	    && nm_active_connection_is_modified (NM_ACTIVE_CONNECTION (self))) {
-		_LOGE ("Failed to request VPN secrets #%d: the connection was modified since requesting secrets",
-		       priv->secrets_idx + 1);
-		_set_vpn_state (self, STATE_FAILED, NM_VPN_CONNECTION_STATE_REASON_NO_SECRETS, FALSE);
-		return;
-	}
 
 	if (error && priv->secrets_idx >= SECRETS_REQ_NEW) {
 		_LOGE ("Failed to request VPN secrets #%d: (%d) %s",
@@ -2136,8 +2132,6 @@ get_secrets (NMVpnConnection *self,
 {
 	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
 	NMSecretAgentGetSecretsFlags flags = NM_SECRET_AGENT_GET_SECRETS_FLAG_NONE;
-	GError *error = NULL;
-	gboolean is_modified;
 
 	g_return_if_fail (secrets_idx < SECRETS_REQ_LAST);
 	priv->secrets_idx = secrets_idx;
@@ -2165,28 +2159,15 @@ get_secrets (NMVpnConnection *self,
 	if (nm_active_connection_get_user_requested (NM_ACTIVE_CONNECTION (self)))
 		flags |= NM_SECRET_AGENT_GET_SECRETS_FLAG_USER_REQUESTED;
 
-	is_modified = nm_active_connection_is_modified (NM_ACTIVE_CONNECTION (self));
-	if (!is_modified) {
-		priv->secrets_id = nm_settings_connection_get_secrets (_get_settings_connection (self, FALSE),
-		                                                       nm_active_connection_get_subject (NM_ACTIVE_CONNECTION (self)),
-		                                                       NM_SETTING_VPN_SETTING_NAME,
-		                                                       flags,
-		                                                       hints,
-		                                                       get_secrets_cb,
-		                                                       self,
-		                                                       &error);
-	}
-	if (is_modified || !priv->secrets_id) {
-		if (is_modified) {
-			_LOGW ("cannot request secrets because the connections was modified since activation: #%d",
-			       priv->secrets_idx + 1);
-		} else {
-			_LOGE ("failed to request VPN secrets #%d: %s",
-			       priv->secrets_idx + 1, error ? error->message : "(unknown reason)");
-		}
-		_set_vpn_state (self, STATE_FAILED, NM_VPN_CONNECTION_STATE_REASON_NO_SECRETS, FALSE);
-		g_clear_error (&error);
-	}
+	priv->secrets_id = nm_settings_connection_get_secrets (_get_settings_connection (self, FALSE),
+	                                                       _get_applied_connection (self),
+	                                                       nm_active_connection_get_subject (NM_ACTIVE_CONNECTION (self)),
+	                                                       NM_SETTING_VPN_SETTING_NAME,
+	                                                       flags,
+	                                                       hints,
+	                                                       get_secrets_cb,
+	                                                       self);
+	g_return_if_fail (priv->secrets_id);
 }
 
 static void

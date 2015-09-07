@@ -287,29 +287,6 @@ nm_active_connection_set_settings_connection (NMActiveConnection *self,
 
 /*******************************************************************/
 
-gboolean
-nm_active_connection_is_modified (NMActiveConnection *self)
-{
-	NMActiveConnectionPrivate *priv;
-
-	g_return_val_if_fail (NM_IS_ACTIVE_CONNECTION (self), FALSE);
-
-	priv = NM_ACTIVE_CONNECTION_GET_PRIVATE (self);
-
-	g_return_val_if_fail (NM_IS_SETTINGS_CONNECTION (priv->settings_connection), FALSE);
-	g_return_val_if_fail (NM_IS_CONNECTION (priv->applied_connection), FALSE);
-
-	if (nm_connection_compare (NM_CONNECTION (priv->settings_connection),
-	                           priv->applied_connection,
-	                           NM_SETTING_COMPARE_FLAG_IGNORE_SECRETS | NM_SETTING_COMPARE_FLAG_IGNORE_TIMESTAMP)) {
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-/*******************************************************************/
-
 void
 nm_active_connection_clear_secrets (NMActiveConnection *self)
 {

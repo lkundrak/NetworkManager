@@ -1174,7 +1174,7 @@ send_agent_owned_secrets (NMSettings *self,
 	                                        secrets_filter_cb,
 	                                        GUINT_TO_POINTER (NM_SETTING_SECRET_FLAG_AGENT_OWNED));
 	nm_agent_manager_save_secrets (priv->agent_mgr,
-	                               nm_connection_get_path (NM_CONNECTION (for_agent)),
+	                               nm_connection_get_path (NM_CONNECTION (connection)),
 	                               for_agent,
 	                               subject);
 	g_object_unref (for_agent);
