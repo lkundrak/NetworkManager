@@ -2207,6 +2207,14 @@ write_ip4_setting (NMConnection *connection, shvarFile *ifcfg, GError **error)
 			goto out;
 	}
 
+	svSetValue (ifcfg, "ARPING_WAIT", NULL, FALSE);
+	if (nm_setting_ip4_config_get_dad_timeout (NM_SETTING_IP4_CONFIG (s_ip4)) != 0) {
+		tmp = g_strdup_printf ("%" G_GINT32_FORMAT,
+		                       nm_setting_ip4_config_get_dad_timeout (NM_SETTING_IP4_CONFIG (s_ip4)));
+		svSetValue (ifcfg, "ARPING_WAIT", tmp, FALSE);
+		g_free (tmp);
+	}
+
 	success = TRUE;
 
 out:

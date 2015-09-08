@@ -1176,6 +1176,20 @@ make_ip4_setting (shvarFile *ifcfg,
 		}
 	}
 
+	value = svGetValue (ifcfg, "ARPING_WAIT", FALSE);
+	if (value) {
+		long int tmp;
+
+		errno = 0;
+		tmp = strtol (value, NULL, 10);
+		if (errno == 0 && tmp >= -1 && tmp <= NM_SETTING_IP4_CONFIG_DAD_TIMEOUT_MAX)
+			g_object_set (s_ip4, NM_SETTING_IP4_CONFIG_DAD_TIMEOUT, tmp, NULL);
+		else
+			PARSE_WARNING ("invalid ARPING_WAIT=%s: use <-1, %d>", value,
+			               NM_SETTING_IP4_CONFIG_DAD_TIMEOUT_MAX);
+		g_free (value);
+	}
+
 	return NM_SETTING (s_ip4);
 
 done:
