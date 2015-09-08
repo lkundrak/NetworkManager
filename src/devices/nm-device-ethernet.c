@@ -267,7 +267,7 @@ static void
 clear_secrets_tries (NMDevice *device)
 {
 	NMActRequest *req;
-	NMSettingsConnection *connection;
+	NMConnection *connection;
 
 	req = nm_device_get_act_request (device);
 	if (req) {
@@ -531,8 +531,9 @@ link_timeout_cb (gpointer user_data)
 	if (nm_device_get_state (dev) != NM_DEVICE_STATE_CONFIG)
 		goto time_out;
 
+	nm_active_connection_clear_secrets (NM_ACTIVE_CONNECTION (req));
+
 	applied_connection = nm_act_request_get_applied_connection (req);
-	nm_connection_clear_secrets (applied_connection);
 	setting_name = nm_connection_need_secrets (applied_connection, NULL);
 	if (!setting_name)
 		goto time_out;
@@ -703,19 +704,19 @@ handle_auth_or_fail (NMDeviceEthernet *self,
 {
 	const char *setting_name;
 	guint32 tries;
-	NMConnection *connection;
+	NMConnection *applied_connection;
 
-	connection = nm_act_request_get_applied_connection (req);
-	g_assert (connection);
+	applied_connection = nm_act_request_get_applied_connection (req);
 
-	tries = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (connection), WIRED_SECRETS_TRIES));
+	tries = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (applied_connection), WIRED_SECRETS_TRIES));
 	if (tries > 3)
 		return NM_ACT_STAGE_RETURN_FAILURE;
 
 	nm_device_state_changed (NM_DEVICE (self), NM_DEVICE_STATE_NEED_AUTH, NM_DEVICE_STATE_REASON_NONE);
 
-	nm_connection_clear_secrets (connection);
-	setting_name = nm_connection_need_secrets (connection, NULL);
+	nm_active_connection_clear_secrets (NM_ACTIVE_CONNECTION (req));
+
+	setting_name = nm_connection_need_secrets (applied_connection, NULL);
 	if (setting_name) {
 		NMSecretAgentGetSecretsFlags flags = NM_SECRET_AGENT_GET_SECRETS_FLAG_ALLOW_INTERACTION;
 
@@ -723,7 +724,7 @@ handle_auth_or_fail (NMDeviceEthernet *self,
 			flags |= NM_SECRET_AGENT_GET_SECRETS_FLAG_REQUEST_NEW;
 		nm_act_request_get_secrets (req, setting_name, flags, NULL, wired_secrets_cb, self);
 
-		g_object_set_data (G_OBJECT (connection), WIRED_SECRETS_TRIES, GUINT_TO_POINTER (++tries));
+		g_object_set_data (G_OBJECT (applied_connection), WIRED_SECRETS_TRIES, GUINT_TO_POINTER (++tries));
 	} else
 		_LOGI (LOGD_DEVICE, "Cleared secrets, but setting didn't need any secrets.");
 

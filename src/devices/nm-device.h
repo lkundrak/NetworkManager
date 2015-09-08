@@ -360,6 +360,7 @@ NMDevice *      nm_device_get_master        (NMDevice *dev);
 NMActRequest *          nm_device_get_act_request               (NMDevice *dev);
 NMSettingsConnection *  nm_device_get_settings_connection       (NMDevice *dev);
 NMConnection *          nm_device_get_applied_connection        (NMDevice *dev);
+gboolean                nm_device_has_unmodified_applied_connection (NMDevice *self);
 
 void            nm_device_removed        (NMDevice *dev);
 

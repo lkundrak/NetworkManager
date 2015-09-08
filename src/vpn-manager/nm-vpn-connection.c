@@ -333,7 +333,6 @@ static void
 vpn_cleanup (NMVpnConnection *self, NMDevice *parent_dev)
 {
 	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
-	NMSettingsConnection *con;
 
 	if (priv->ip_ifindex) {
 		nm_platform_link_set_down (NM_PLATFORM_GET, priv->ip_ifindex);
@@ -362,9 +361,7 @@ vpn_cleanup (NMVpnConnection *self, NMDevice *parent_dev)
 	/* Clear out connection secrets to ensure that the settings service
 	 * gets asked for them next time the connection is activated.
 	 */
-	con = _get_settings_connection (self, TRUE);
-	if (con)
-		nm_connection_clear_secrets (NM_CONNECTION (con));
+	nm_active_connection_clear_secrets (NM_ACTIVE_CONNECTION (self));
 }
 
 static void
@@ -478,7 +475,7 @@ _set_vpn_state (NMVpnConnection *self,
 		break;
 	case STATE_ACTIVATED:
 		/* Secrets no longer needed now that we're connected */
-		nm_connection_clear_secrets (NM_CONNECTION (_get_settings_connection (self, FALSE)));
+		nm_active_connection_clear_secrets (NM_ACTIVE_CONNECTION (self));
 
 		/* Let dispatcher scripts know we're up and running */
 		nm_dispatcher_call_vpn (DISPATCHER_ACTION_VPN_UP,
@@ -862,7 +859,7 @@ plugin_state_changed (NMVpnConnection *self, NMVpnServiceState new_service_state
 		/* Clear connection secrets to ensure secrets get requested each time the
 		 * connection is activated.
 		 */
-		nm_connection_clear_secrets (NM_CONNECTION (_get_settings_connection (self, FALSE)));
+		nm_active_connection_clear_secrets (NM_ACTIVE_CONNECTION (self));
 
 		if ((priv->vpn_state >= STATE_WAITING) && (priv->vpn_state <= STATE_ACTIVATED)) {
 			VpnState old_state = priv->vpn_state;

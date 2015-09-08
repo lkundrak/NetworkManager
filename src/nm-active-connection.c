@@ -286,6 +286,21 @@ nm_active_connection_set_settings_connection (NMActiveConnection *self,
 	nm_connection_clear_secrets (priv->applied_connection);
 }
 
+gboolean
+nm_active_connection_has_unmodified_applied_connection (NMActiveConnection *self)
+{
+	NMActiveConnectionPrivate *priv;
+
+	g_return_val_if_fail (NM_IS_ACTIVE_CONNECTION (self), FALSE);
+
+	priv = NM_ACTIVE_CONNECTION_GET_PRIVATE (self);
+
+	g_return_val_if_fail (priv->settings_connection, FALSE);
+
+	return nm_settings_connection_has_unmodified_applied_connection (priv->settings_connection,
+	                                                                 priv->applied_connection);
+}
+
 /*******************************************************************/
 
 void
@@ -297,7 +312,9 @@ nm_active_connection_clear_secrets (NMActiveConnection *self)
 
 	priv = NM_ACTIVE_CONNECTION_GET_PRIVATE (self);
 
-	nm_connection_clear_secrets ((NMConnection *) priv->settings_connection);
+	if (nm_settings_connection_has_unmodified_applied_connection (priv->settings_connection,
+	                                                              priv->applied_connection))
+		nm_connection_clear_secrets ((NMConnection *) priv->settings_connection);
 	nm_connection_clear_secrets (priv->applied_connection);
 }
 

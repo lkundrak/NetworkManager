@@ -908,6 +908,17 @@ nm_device_get_applied_connection (NMDevice *self)
 	return priv->act_request ? nm_act_request_get_applied_connection (priv->act_request) : NULL;
 }
 
+gboolean
+nm_device_has_unmodified_applied_connection (NMDevice *self)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	if (!priv->act_request)
+		return FALSE;
+
+	return nm_active_connection_has_unmodified_applied_connection ((NMActiveConnection *) priv->act_request);
+}
+
 RfKillType
 nm_device_get_rfkill_type (NMDevice *self)
 {

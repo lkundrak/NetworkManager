@@ -105,6 +105,8 @@ NMSettingsConnection *_nm_active_connection_get_settings_connection (NMActiveCon
 void          nm_active_connection_set_settings_connection (NMActiveConnection *self,
                                                             NMSettingsConnection *connection);
 
+gboolean      nm_active_connection_has_unmodified_applied_connection (NMActiveConnection *self);
+
 const char *  nm_active_connection_get_settings_connection_id         (NMActiveConnection *self);
 
 const char *  nm_active_connection_get_specific_object (NMActiveConnection *self);

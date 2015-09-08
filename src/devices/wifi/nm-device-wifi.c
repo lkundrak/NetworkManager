@@ -318,8 +318,6 @@ get_ap_by_supplicant_path (NMDeviceWifi *self, const char *path)
 static void
 update_seen_bssids_cache (NMDeviceWifi *self, NMAccessPoint *ap)
 {
-	NMSettingsConnection *connection;
-
 	g_return_if_fail (NM_IS_DEVICE_WIFI (self));
 
 	if (ap == NULL)
@@ -329,12 +327,10 @@ update_seen_bssids_cache (NMDeviceWifi *self, NMAccessPoint *ap)
 	if (nm_ap_get_mode (ap) != NM_802_11_MODE_INFRA)
 		return;
 
-	if (nm_device_get_state (NM_DEVICE (self)) == NM_DEVICE_STATE_ACTIVATED) {
-		connection = nm_device_get_settings_connection (NM_DEVICE (self));
-		if (connection) {
-			nm_settings_connection_add_seen_bssid (NM_SETTINGS_CONNECTION (connection),
-			                                       nm_ap_get_address (ap));
-		}
+	if (   nm_device_get_state (NM_DEVICE (self)) == NM_DEVICE_STATE_ACTIVATED
+	    && nm_device_has_unmodified_applied_connection (NM_DEVICE (self))) {
+		nm_settings_connection_add_seen_bssid (nm_device_get_settings_connection (NM_DEVICE (self)),
+		                                       nm_ap_get_address (ap));
 	}
 }
 
