@@ -63,7 +63,7 @@ typedef struct {
 
 	NMActRequest *act_req;
 	GDBusMethodInvocation *pending_secrets_context;
-	guint32 secrets_id;
+	NMActRequestGetSecretsCallId secrets_id;
 	const char *secrets_setting_name;
 
 	guint32 ppp_watch_id;
@@ -229,7 +229,7 @@ static void
 remove_timeout_handler (NMPPPManager *manager)
 {
 	NMPPPManagerPrivate *priv = NM_PPP_MANAGER_GET_PRIVATE (manager);
-	
+
 	if (priv->ppp_timeout_handler) {
 		g_source_remove (priv->ppp_timeout_handler);
 		priv->ppp_timeout_handler = 0;
@@ -241,11 +241,10 @@ cancel_get_secrets (NMPPPManager *self)
 {
 	NMPPPManagerPrivate *priv = NM_PPP_MANAGER_GET_PRIVATE (self);
 
-	if (priv->secrets_id) {
+	if (priv->secrets_id)
 		nm_act_request_cancel_secrets (priv->act_req, priv->secrets_id);
-		priv->secrets_id = 0;
-	}
-	priv->secrets_setting_name = NULL;
+
+	g_return_if_fail (!priv->secrets_id && !priv->secrets_setting_name);
 }
 
 static gboolean
@@ -309,8 +308,8 @@ extract_details_from_connection (NMConnection *connection,
 
 static void
 ppp_secrets_cb (NMActRequest *req,
-                guint32 call_id,
-                NMConnection *connection,
+                NMActRequestGetSecretsCallId call_id,
+                NMSettingsConnection *settings_connection, /* unused (we pass NULL here) */
                 GError *error,
                 gpointer user_data)
 {
@@ -319,10 +318,14 @@ ppp_secrets_cb (NMActRequest *req,
 	const char *username = NULL;
 	const char *password = NULL;
 	GError *local = NULL;
+	NMConnection *applied_connection;
 
 	g_return_if_fail (priv->pending_secrets_context != NULL);
 	g_return_if_fail (req == priv->act_req);
 	g_return_if_fail (call_id == priv->secrets_id);
+
+	if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+		goto out;
 
 	if (error) {
 		nm_log_warn (LOGD_PPP, "%s", error->message);
@@ -330,7 +333,9 @@ ppp_secrets_cb (NMActRequest *req,
 		goto out;
 	}
 
-	if (!extract_details_from_connection (connection, priv->secrets_setting_name, &username, &password, &local)) {
+	applied_connection = nm_act_request_get_applied_connection (req);
+
+	if (!extract_details_from_connection (applied_connection, priv->secrets_setting_name, &username, &password, &local)) {
 		nm_log_warn (LOGD_PPP, "%s", local->message);
 		g_dbus_method_invocation_take_error (priv->pending_secrets_context, local);
 		goto out;
@@ -348,7 +353,7 @@ ppp_secrets_cb (NMActRequest *req,
 
  out:
 	priv->pending_secrets_context = NULL;
-	priv->secrets_id = 0;
+	priv->secrets_id = NULL;
 	priv->secrets_setting_name = NULL;
 }
 
@@ -357,7 +362,7 @@ impl_ppp_manager_need_secrets (NMPPPManager *manager,
                                GDBusMethodInvocation *context)
 {
 	NMPPPManagerPrivate *priv = NM_PPP_MANAGER_GET_PRIVATE (manager);
-	NMConnection *connection;
+	NMConnection *applied_connection;
 	const char *username = NULL;
 	const char *password = NULL;
 	guint32 tries;
@@ -365,16 +370,17 @@ impl_ppp_manager_need_secrets (NMPPPManager *manager,
 	GError *error = NULL;
 	NMSecretAgentGetSecretsFlags flags = NM_SECRET_AGENT_GET_SECRETS_FLAG_ALLOW_INTERACTION;
 
-	connection = nm_act_request_get_connection (priv->act_req);
+	nm_active_connection_clear_secrets (NM_ACTIVE_CONNECTION (priv->act_req));
 
-	nm_connection_clear_secrets (connection);
-	priv->secrets_setting_name = nm_connection_need_secrets (connection, &hints);
+	applied_connection = nm_act_request_get_applied_connection (priv->act_req);
+
+	priv->secrets_setting_name = nm_connection_need_secrets (applied_connection, &hints);
 	if (!priv->secrets_setting_name) {
 		/* Use existing secrets from the connection */
-		if (extract_details_from_connection (connection, NULL, &username, &password, &error)) {
+		if (extract_details_from_connection (applied_connection, NULL, &username, &password, &error)) {
 			/* Send existing secrets to the PPP plugin */
 			priv->pending_secrets_context = context;
-			ppp_secrets_cb (priv->act_req, priv->secrets_id, connection, NULL, manager);
+			ppp_secrets_cb (priv->act_req, priv->secrets_id, NULL, NULL, manager);
 		} else {
 			nm_log_warn (LOGD_PPP, "%s", error->message);
 			g_dbus_method_invocation_take_error (priv->pending_secrets_context, error);
@@ -386,7 +392,7 @@ impl_ppp_manager_need_secrets (NMPPPManager *manager,
 	 * appear to ask a few times when they actually don't even care what you
 	 * pass back.
 	 */
-	tries = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (connection), PPP_MANAGER_SECRET_TRIES));
+	tries = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (applied_connection), PPP_MANAGER_SECRET_TRIES));
 	if (tries > 1)
 		flags |= NM_SECRET_AGENT_GET_SECRETS_FLAG_REQUEST_NEW;
 
@@ -396,7 +402,7 @@ impl_ppp_manager_need_secrets (NMPPPManager *manager,
 	                                               hints ? g_ptr_array_index (hints, 0) : NULL,
 	                                               ppp_secrets_cb,
 	                                               manager);
-	g_object_set_data (G_OBJECT (connection), PPP_MANAGER_SECRET_TRIES, GUINT_TO_POINTER (++tries));
+	g_object_set_data (G_OBJECT (applied_connection), PPP_MANAGER_SECRET_TRIES, GUINT_TO_POINTER (++tries));
 	priv->pending_secrets_context = context;
 
 	if (hints)
@@ -420,7 +426,7 @@ set_ip_config_common (NMPPPManager *self,
                       guint32 *out_mtu)
 {
 	NMPPPManagerPrivate *priv = NM_PPP_MANAGER_GET_PRIVATE (self);
-	NMConnection *connection;
+	NMConnection *applied_connection;
 	NMSettingPpp *s_ppp;
 	const char *iface;
 
@@ -432,12 +438,11 @@ set_ip_config_common (NMPPPManager *self,
 		priv->ip_iface = g_strdup (iface);
 
 	/* Got successful IP config; obviously the secrets worked */
-	connection = nm_act_request_get_connection (priv->act_req);
-	g_assert (connection);
-	g_object_set_data (G_OBJECT (connection), PPP_MANAGER_SECRET_TRIES, NULL);
+	applied_connection = nm_act_request_get_applied_connection (priv->act_req);
+	g_object_set_data (G_OBJECT (applied_connection), PPP_MANAGER_SECRET_TRIES, NULL);
 
 	/* Get any custom MTU */
-	s_ppp = nm_connection_get_setting_ppp (connection);
+	s_ppp = nm_connection_get_setting_ppp (applied_connection);
 	if (s_ppp && out_mtu)
 		*out_mtu = nm_setting_ppp_get_mtu (s_ppp);
 
@@ -1045,7 +1050,7 @@ nm_ppp_manager_start (NMPPPManager *manager,
 	if (stat ("/dev/ppp", &st) || !S_ISCHR (st.st_mode))
 		nm_utils_modprobe (NULL, FALSE, "ppp_generic", NULL);
 
-	connection = nm_act_request_get_connection (req);
+	connection = nm_act_request_get_applied_connection (req);
 	g_assert (connection);
 
 	s_ppp = nm_connection_get_setting_ppp (connection);

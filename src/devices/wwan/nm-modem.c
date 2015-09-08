@@ -30,6 +30,7 @@
 #include "nm-device-private.h"
 #include "nm-modem-enum-types.h"
 #include "nm-route-manager.h"
+#include "gsystem-local-alloc.h"
 
 G_DEFINE_TYPE (NMModem, nm_modem, G_TYPE_OBJECT)
 
@@ -73,7 +74,7 @@ typedef struct {
 
 	NMActRequest *act_request;
 	guint32 secrets_tries;
-	guint32 secrets_id;
+	NMActRequestGetSecretsCallId secrets_id;
 
 	guint32 mm_ip_timeout;
 
@@ -490,7 +491,7 @@ ppp_stage3_ip_config_start (NMModem *self,
 		return NM_ACT_STAGE_RETURN_POSTPONE;
 
 	if (NM_MODEM_GET_CLASS (self)->get_user_pass) {
-		NMConnection *connection = nm_act_request_get_connection (req);
+		NMConnection *connection = nm_act_request_get_applied_connection (req);
 
 		g_assert (connection);
 		if (!NM_MODEM_GET_CLASS (self)->get_user_pass (self, connection, &ppp_name, NULL))
@@ -560,7 +561,7 @@ nm_modem_stage3_ip4_config_start (NMModem *self,
 
 	req = nm_device_get_act_request (device);
 	g_assert (req);
-	connection = nm_act_request_get_connection (req);
+	connection = nm_act_request_get_applied_connection (req);
 	g_assert (connection);
 	method = nm_utils_get_ip_config_method (connection, NM_TYPE_SETTING_IP4_CONFIG);
 
@@ -677,7 +678,7 @@ nm_modem_stage3_ip6_config_start (NMModem *self,
 	g_return_val_if_fail (NM_IS_ACT_REQUEST (req), NM_ACT_STAGE_RETURN_FAILURE);
 	g_return_val_if_fail (reason != NULL, NM_ACT_STAGE_RETURN_FAILURE);
 
-	connection = nm_act_request_get_connection (req);
+	connection = nm_act_request_get_applied_connection (req);
 	g_assert (connection);
 	method = nm_utils_get_ip_config_method (connection, NM_TYPE_SETTING_IP6_CONFIG);
 
@@ -722,16 +723,13 @@ cancel_get_secrets (NMModem *self)
 {
 	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (self);
 
-	if (priv->secrets_id) {
-		nm_act_request_cancel_secrets (priv->act_request, priv->secrets_id);
-		priv->secrets_id = 0;
-	}
+	nm_act_request_cancel_secrets (priv->act_request, priv->secrets_id);
 }
 
 static void
 modem_secrets_cb (NMActRequest *req,
-                  guint32 call_id,
-                  NMConnection *connection,
+                  NMActRequestGetSecretsCallId call_id,
+                  NMSettingsConnection *connection,
                   GError *error,
                   gpointer user_data)
 {
@@ -740,7 +738,10 @@ modem_secrets_cb (NMActRequest *req,
 
 	g_return_if_fail (call_id == priv->secrets_id);
 
-	priv->secrets_id = 0;
+	priv->secrets_id = NULL;
+
+	if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+		return;
 
 	if (error)
 		nm_log_warn (LOGD_MB, "(%s): %s", nm_modem_get_uid (self), error->message);
@@ -748,7 +749,7 @@ modem_secrets_cb (NMActRequest *req,
 	g_signal_emit (self, signals[AUTH_RESULT], 0, error);
 }
 
-gboolean
+void
 nm_modem_get_secrets (NMModem *self,
                       const char *setting_name,
                       gboolean request_new,
@@ -767,10 +768,8 @@ nm_modem_get_secrets (NMModem *self,
 	                                               hint,
 	                                               modem_secrets_cb,
 	                                               self);
-	if (priv->secrets_id)
-		g_signal_emit (self, signals[AUTH_REQUESTED], 0);
-
-	return !!(priv->secrets_id);
+	g_return_if_fail (priv->secrets_id);
+	g_signal_emit (self, signals[AUTH_REQUESTED], 0);
 }
 
 /*****************************************************************************/
@@ -790,8 +789,7 @@ nm_modem_act_stage1_prepare (NMModem *self,
                              NMDeviceStateReason *reason)
 {
 	NMModemPrivate *priv = NM_MODEM_GET_PRIVATE (self);
-	NMActStageReturn ret;
-	GPtrArray *hints = NULL;
+	gs_unref_ptrarray GPtrArray *hints = NULL;
 	const char *setting_name = NULL;
 	NMSecretAgentGetSecretsFlags flags = NM_SECRET_AGENT_GET_SECRETS_FLAG_ALLOW_INTERACTION;
 	NMConnection *connection;
@@ -800,7 +798,7 @@ nm_modem_act_stage1_prepare (NMModem *self,
 		g_object_unref (priv->act_request);
 	priv->act_request = g_object_ref (req);
 
-	connection = nm_act_request_get_connection (req);
+	connection = nm_act_request_get_applied_connection (req);
 	g_assert (connection);
 
 	setting_name = nm_connection_need_secrets (connection, &hints);
@@ -820,18 +818,9 @@ nm_modem_act_stage1_prepare (NMModem *self,
 	                                               hints ? g_ptr_array_index (hints, 0) : NULL,
 	                                               modem_secrets_cb,
 	                                               self);
-	if (priv->secrets_id) {
-		g_signal_emit (self, signals[AUTH_REQUESTED], 0);
-		ret = NM_ACT_STAGE_RETURN_POSTPONE;
-	} else {
-		*reason = NM_DEVICE_STATE_REASON_NO_SECRETS;
-		ret = NM_ACT_STAGE_RETURN_FAILURE;
-	}
-
-	if (hints)
-		g_ptr_array_free (hints, TRUE);
-
-	return ret;
+	g_return_val_if_fail (priv->secrets_id, NM_ACT_STAGE_RETURN_FAILURE);
+	g_signal_emit (self, signals[AUTH_REQUESTED], 0);
+	return NM_ACT_STAGE_RETURN_POSTPONE;
 }
 
 /*****************************************************************************/

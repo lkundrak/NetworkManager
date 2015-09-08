@@ -332,6 +332,7 @@ get_callback (GObject *proxy,
 
 NMSecretAgentCallId
 nm_secret_agent_get_secrets (NMSecretAgent *self,
+                             const char *path,
                              NMConnection *connection,
                              const char *setting_name,
                              const char **hints,
@@ -344,8 +345,9 @@ nm_secret_agent_get_secrets (NMSecretAgent *self,
 	GVariant *dict;
 	Request *r;
 
-	g_return_val_if_fail (self != NULL, NULL);
-	g_return_val_if_fail (connection != NULL, NULL);
+	g_return_val_if_fail (NM_IS_SECRET_AGENT (self), NULL);
+	g_return_val_if_fail (NM_IS_CONNECTION (connection), NULL);
+	g_return_val_if_fail (path && *path, NULL);
 	g_return_val_if_fail (setting_name != NULL, NULL);
 
 	priv = NM_SECRET_AGENT_GET_PRIVATE (self);
@@ -357,12 +359,12 @@ nm_secret_agent_get_secrets (NMSecretAgent *self,
 	flags &= ~NM_SECRET_AGENT_GET_SECRETS_FLAG_ONLY_SYSTEM;
 	flags &= ~NM_SECRET_AGENT_GET_SECRETS_FLAG_NO_ERRORS;
 
-	r = request_new (self, "GetSecrets", nm_connection_get_path (connection), setting_name, callback, callback_data);
+	r = request_new (self, "GetSecrets", path, setting_name, callback, callback_data);
 	r->is_get_secrets = TRUE;
 	g_hash_table_add (priv->requests, r);
 	nmdbus_secret_agent_call_get_secrets (priv->proxy,
 	                                      dict,
-	                                      nm_connection_get_path (connection),
+	                                      path,
 	                                      setting_name,
 	                                      hints ? hints : no_hints,
 	                                      flags,
@@ -446,6 +448,17 @@ do_cancel_secrets (NMSecretAgent *self, Request *r, gboolean disposing)
 	}
 }
 
+/**
+ * nm_secret_agent_cancel_secrets:
+ * @self: #NMSecretAgent instance
+ * @call_id: the call id to cancel
+ *
+ * It is an error to pass an invalid @call_id or a @call_id for an operation
+ * that already completed. NMSecretAgent will always invoke the callback,
+ * also for cancel() and dispose().
+ * In case of nm_secret_agent_cancel_secrets() this will synchronously invoke the
+ * callback before nm_secret_agent_cancel_secrets() returns.
+ */
 void
 nm_secret_agent_cancel_secrets (NMSecretAgent *self, NMSecretAgentCallId call_id)
 {
@@ -486,6 +499,7 @@ agent_save_cb (GObject *proxy,
 
 NMSecretAgentCallId
 nm_secret_agent_save_secrets (NMSecretAgent *self,
+                              const char *path,
                               NMConnection *connection,
                               NMSecretAgentCallback callback,
                               gpointer callback_data)
@@ -493,21 +507,21 @@ nm_secret_agent_save_secrets (NMSecretAgent *self,
 	NMSecretAgentPrivate *priv;
 	GVariant *dict;
 	Request *r;
-	const char *cpath;
 
-	g_return_val_if_fail (self != NULL, NULL);
-	g_return_val_if_fail (connection != NULL, NULL);
+	g_return_val_if_fail (NM_IS_SECRET_AGENT (self), NULL);
+	g_return_val_if_fail (NM_IS_CONNECTION (connection), NULL);
+	g_return_val_if_fail (path && *path, NULL);
 
 	priv = NM_SECRET_AGENT_GET_PRIVATE (self);
-	cpath = nm_connection_get_path (connection);
 
 	/* Caller should have ensured that only agent-owned secrets exist in 'connection' */
 	dict = nm_connection_to_dbus (connection, NM_CONNECTION_SERIALIZE_ALL);
 
-	r = request_new (self, "SaveSecrets", cpath, NULL, callback, callback_data);
+	r = request_new (self, "SaveSecrets", path, NULL, callback, callback_data);
 	g_hash_table_add (priv->requests, r);
 	nmdbus_secret_agent_call_save_secrets (priv->proxy,
-	                                       dict, cpath,
+	                                       dict,
+	                                       path,
 	                                       NULL, /* cancelling the request does *not* cancel the D-Bus call. */
 	                                       agent_save_cb, r);
 
@@ -538,6 +552,7 @@ agent_delete_cb (GObject *proxy,
 
 NMSecretAgentCallId
 nm_secret_agent_delete_secrets (NMSecretAgent *self,
+                                const char *path,
                                 NMConnection *connection,
                                 NMSecretAgentCallback callback,
                                 gpointer callback_data)
@@ -545,21 +560,21 @@ nm_secret_agent_delete_secrets (NMSecretAgent *self,
 	NMSecretAgentPrivate *priv;
 	GVariant *dict;
 	Request *r;
-	const char *cpath;
 
-	g_return_val_if_fail (self != NULL, NULL);
-	g_return_val_if_fail (connection != NULL, NULL);
+	g_return_val_if_fail (NM_IS_SECRET_AGENT (self), NULL);
+	g_return_val_if_fail (NM_IS_CONNECTION (connection), NULL);
+	g_return_val_if_fail (path && *path, NULL);
 
 	priv = NM_SECRET_AGENT_GET_PRIVATE (self);
-	cpath = nm_connection_get_path (connection);
 
 	/* No secrets sent; agents must be smart enough to track secrets using the UUID or something */
 	dict = nm_connection_to_dbus (connection, NM_CONNECTION_SERIALIZE_NO_SECRETS);
 
-	r = request_new (self, "DeleteSecrets", cpath, NULL, callback, callback_data);
+	r = request_new (self, "DeleteSecrets", path, NULL, callback, callback_data);
 	g_hash_table_add (priv->requests, r);
 	nmdbus_secret_agent_call_delete_secrets (priv->proxy,
-	                                         dict, cpath,
+	                                         dict,
+	                                         path,
 	                                         NULL, /* cancelling the request does *not* cancel the D-Bus call. */
 	                                         agent_delete_cb, r);
 
