@@ -509,6 +509,7 @@ unmanaged-devices=mac:00:22:68:1c:59:b1;mac:00:1E:65:30:D1:C4;interface-name:eth
         Example:
 <programlisting>
 [connection]
+ipv4.dad-timeout=-1
 ipv6.ip6-privacy=0
 connection.autoconnect-slaves=1
 
@@ -578,6 +579,10 @@ ipv6.ip6-privacy=1
         </varlistentry>
         <varlistentry>
           <term><varname>ipv4.route-metric</varname></term>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>ipv4.dad-timeout</varname></term>
+          <listitem><para>If left unspecified, use the default value of 3 seconds.</para></listitem>
         </varlistentry>
         <varlistentry>
           <term><varname>ipv6.ip6-privacy</varname></term>
