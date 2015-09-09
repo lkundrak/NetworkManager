@@ -4350,7 +4350,7 @@ dhcp6_fail (NMDevice *self, gboolean timeout)
 			if (   priv->con_ip6_config
 			    && nm_ip6_config_get_num_addresses (priv->con_ip6_config) > 0)
 				has_address = TRUE;
-			
+
 			if (has_address || priv->dhcp6_num_restarts_left) {
 				_LOGI (LOGD_DEVICE, "restarting DHCP6 in %d seconds", DHCP_RESTART_TIMEOUT);
 				priv->dhcp6_restart_id = g_timeout_add_seconds (DHCP_RESTART_TIMEOUT,
