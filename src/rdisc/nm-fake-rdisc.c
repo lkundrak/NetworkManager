@@ -268,7 +268,7 @@ receive_ra (gpointer user_data)
 	for (i = 0; i < ra->addresses->len; i++) {
 		NMRDiscAddress *item = &g_array_index (ra->addresses, NMRDiscAddress, i);
 
-		if (nm_rdisc_add_address (rdisc, item))
+		if (nm_rdisc_complete_and_add_address (rdisc, item))
 			changed |= NM_RDISC_CONFIG_ADDRESSES;
 	}
 

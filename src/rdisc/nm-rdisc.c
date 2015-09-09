@@ -30,6 +30,8 @@
 #include "nm-default.h"
 #include "nm-utils.h"
 
+#include <nm-setting-ip6-config.h>
+
 #define _NMLOG_PREFIX_NAME                "rdisc"
 
 typedef struct {
@@ -87,10 +89,55 @@ nm_rdisc_add_gateway (NMRDisc *rdisc, const NMRDiscGateway *new)
 	return !!new->lifetime;
 }
 
+/**
+ * complete_address:
+ * @rdisc: the #NMRDisc
+ * @addr: the #NMRDiscAddress
+ *
+ * Adds the host part to the address that has network part set.
+ * If the address already has a host part, add a different host part
+ * if possible (this is useful in case DAD failed).
+ *
+ * Can fail if a different address can not be generated (DAD failure
+ * for an EUI-64 address or DAD counter overflow).
+ *
+ * Returns: %TRUE if the address could be completed, %FALSE otherwise.
+ **/
+static gboolean
+complete_address (NMRDisc *rdisc, NMRDiscAddress *addr)
+{
+	if (!g_strcmp0 (rdisc->addr_gen_mode,
+	                NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE_STABLE_PRIVACY)) {
+		_LOGD ("Adding an stable-privacy address");
+		return nm_utils_ipv6_addr_set_stable_privacy (&addr->address,
+		                                              rdisc->ifname,
+		                                              rdisc->uuid,
+		                                              addr->dad_counter++);
+	}
+
+	if (!rdisc->iid.id) {
+		_LOGW ("Can't generate an EUI-64 address: no interface identifier");
+		return FALSE;
+	}
+
+	if (addr->address.s6_addr32[2] == 0x0 && addr->address.s6_addr32[3] == 0x0) {
+		_LOGD ("Adding an EUI-64 address");
+		nm_utils_ipv6_addr_set_interface_identfier (&addr->address, rdisc->iid);
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 gboolean
-nm_rdisc_add_address (NMRDisc *rdisc, const NMRDiscAddress *new)
+nm_rdisc_complete_and_add_address (NMRDisc *rdisc, NMRDiscAddress *new)
 {
 	int i;
+
+	if (!complete_address (rdisc, new)) {
+		_LOGW ("Can't generate an IPv6 address");
+		return FALSE;
+	}
 
 	for (i = 0; i < rdisc->addresses->len; i++) {
 		NMRDiscAddress *item = &g_array_index (rdisc->addresses, NMRDiscAddress, i);
@@ -233,7 +280,10 @@ nm_rdisc_add_dns_domain (NMRDisc *rdisc, const NMRDiscDNSDomain *new)
  * the old identifier are removed. The caller should ensure the addresses
  * will be reset by soliciting router advertisements.
  *
- * Returns: %TRUE if the token was changed, %FALSE otherwise.
+ * In case the stable privacy addressing is used %FALSE is returned and
+ * addresses are left untouched.
+ *
+ * Returns: %TRUE if addresses need to be regenerated, %FALSE otherwise.
  **/
 gboolean
 nm_rdisc_set_iid (NMRDisc *rdisc, const NMUtilsIPv6IfaceId iid)
@@ -242,6 +292,11 @@ nm_rdisc_set_iid (NMRDisc *rdisc, const NMUtilsIPv6IfaceId iid)
 
 	if (rdisc->iid.id != iid.id) {
 		rdisc->iid = iid;
+
+		if (!g_strcmp0 (rdisc->addr_gen_mode,
+	                        NM_SETTING_IP6_CONFIG_ADDR_GEN_MODE_STABLE_PRIVACY))
+			return FALSE;
+
 		if (rdisc->addresses->len) {
 			_LOGD ("IPv6 interface identifier changed, flushing addresses");
 			g_array_remove_range (rdisc->addresses, 0, rdisc->addresses->len);
@@ -348,6 +403,28 @@ nm_rdisc_start (NMRDisc *rdisc)
 		klass->start (rdisc);
 
 	solicit (rdisc);
+}
+
+void
+nm_rdisc_dad_failed (NMRDisc *rdisc, struct in6_addr *address)
+{
+	NMRDiscPrivate *priv = NM_RDISC_GET_PRIVATE (rdisc);
+	int i;
+
+	for (i = 0; i < rdisc->addresses->len; i++) {
+		NMRDiscAddress *item = &g_array_index (rdisc->addresses, NMRDiscAddress, i);
+
+		if (!IN6_ARE_ADDR_EQUAL (&item->address, address))
+			continue;
+
+		_LOGD ("DAD failed for a discovered address\n");
+		if (!complete_address (rdisc, item)) {
+			_LOGW ("Could not generate new address for a failed one\n");
+			g_array_remove_index (rdisc->addresses, i--);
+		}
+	}
+
+	g_signal_emit_by_name (rdisc, NM_RDISC_CONFIG_CHANGED, NM_RDISC_CONFIG_ADDRESSES);
 }
 
 #define CONFIG_MAP_MAX_STR 7
@@ -636,6 +713,7 @@ finalize (GObject *object)
 	NMRDisc *rdisc = NM_RDISC (object);
 
 	g_free (rdisc->ifname);
+	g_free (rdisc->uuid);
 	g_array_unref (rdisc->gateways);
 	g_array_unref (rdisc->addresses);
 	g_array_unref (rdisc->routes);
