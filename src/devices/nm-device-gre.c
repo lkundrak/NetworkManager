@@ -160,7 +160,7 @@ update_connection (NMDevice *device, NMConnection *connection)
 		g_object_set (G_OBJECT (s_tunnel), NM_SETTING_TUNNEL_MODE, NM_SETTING_TUNNEL_MODE_GRE, NULL);
 
 	if (nm_setting_tunnel_get_local (s_tunnel))
-		local = inet_pton (AF_INET, nm_setting_tunnel_get_local (s_tunnel), &local);
+		inet_pton (AF_INET, nm_setting_tunnel_get_local (s_tunnel), &local);
 	if (local != props.local) {
 		g_object_set (G_OBJECT (s_tunnel),
 		              NM_SETTING_TUNNEL_LOCAL,
@@ -169,7 +169,7 @@ update_connection (NMDevice *device, NMConnection *connection)
 	}
 
 	if (nm_setting_tunnel_get_remote (s_tunnel))
-		remote = inet_pton (AF_INET, nm_setting_tunnel_get_remote (s_tunnel), &remote);
+		inet_pton (AF_INET, nm_setting_tunnel_get_remote (s_tunnel), &remote);
 	if (remote != props.remote) {
 		g_object_set (G_OBJECT (s_tunnel),
 		              NM_SETTING_TUNNEL_REMOTE,
