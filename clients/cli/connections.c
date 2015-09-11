@@ -5479,8 +5479,17 @@ cleanup_olpc:
 			goto cleanup_tunnel;
 		}
 
-		if (!nm_utils_ipaddr_valid (AF_INET, remote) &&
-		    !nm_utils_ipaddr_valid (AF_INET6, remote)) {
+		if (   local
+		    && !nm_utils_ipaddr_valid (AF_INET, local)
+		    && !nm_utils_ipaddr_valid (AF_INET6, local)) {
+			g_set_error (error, NMCLI_ERROR, NMC_RESULT_ERROR_USER_INPUT,
+			             _("Error: 'local': '%s' is not valid; must be an IPv4 or IPv6 address"),
+			             local);
+			goto cleanup_tunnel;
+		}
+
+		if (   !nm_utils_ipaddr_valid (AF_INET, remote)
+		    && !nm_utils_ipaddr_valid (AF_INET6, remote)) {
 			g_set_error (error, NMCLI_ERROR, NMC_RESULT_ERROR_USER_INPUT,
 			             _("Error: 'remote': '%s' is not valid; must be an IPv4 or IPv6 address"),
 			             remote);
