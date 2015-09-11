@@ -1562,9 +1562,9 @@ nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to
 /**
  * nm_platform_gre_add:
  * @self: platform instance
- * @name: New interface name
- * @local:
- * @remote:
+ * @name: new interface name
+ * @local: address of local endpoint
+ * @remote: address of remote endpoint
  * @out_link: on success, the link object
  *
  * Create a software GRE device.
