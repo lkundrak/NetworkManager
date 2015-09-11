@@ -634,6 +634,15 @@ nm_setting_ip4_config_class_init (NMSettingIP4ConfigClass *ip4_class)
 	 *
 	 * Since: 1.2
 	 **/
+	/* ---ifcfg-rh---
+	 * property: dad-timeout
+	 * variable: ARPING_WAIT
+	 * default: missing variable means global default (config override or 3)
+	 * description: Timeout (in seconds) for performing DAD before configuring
+	 * static addresses. -1 turns off the DAD completely, 0 means default value.
+	 * example: ARPING_WAIT=-1
+	 * ---end---
+	 */
 	g_object_class_install_property
 		(object_class, PROP_DAD_TIMEOUT,
 		 g_param_spec_int (NM_SETTING_IP4_CONFIG_DAD_TIMEOUT, "", "",
