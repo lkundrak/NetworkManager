@@ -376,12 +376,19 @@ typedef struct {
 	guint16 output_flags;
 	guint32 input_key;
 	guint32 output_key;
-	in_addr_t local;
-	in_addr_t remote;
+	union {
+		in_addr_t local4;
+		struct in6_addr local6;
+	};
+	union {
+		in_addr_t remote4;
+		struct in6_addr remote6;
+	};
+	gint encap;
 	guint8 ttl;
 	guint8 tos;
 	gboolean path_mtu_discovery;
-} NMPlatformGreProperties;
+} NMPlatformIPTunnelProperties;
 
 /******************************************************************/
 
@@ -498,7 +505,7 @@ typedef struct {
 	gboolean (*tun_get_properties) (NMPlatform *, int ifindex, NMPlatformTunProperties *properties);
 	gboolean (*macvlan_get_properties) (NMPlatform *, int ifindex, NMPlatformMacvlanProperties *props);
 	gboolean (*vxlan_get_properties) (NMPlatform *, int ifindex, NMPlatformVxlanProperties *props);
-	gboolean (*gre_get_properties) (NMPlatform *, int ifindex, NMPlatformGreProperties *props);
+	gboolean (*ip_tunnel_get_properties) (NMPlatform *, NMLinkType type, int ifindex, NMPlatformIPTunnelProperties *props);
 
 	gboolean    (*wifi_get_capabilities) (NMPlatform *, int ifindex, NMDeviceWifiCapabilities *caps);
 	gboolean    (*wifi_get_bssid)        (NMPlatform *, int ifindex, guint8 *bssid);
@@ -684,7 +691,7 @@ gboolean nm_platform_veth_get_properties        (NMPlatform *self, int ifindex, 
 gboolean nm_platform_tun_get_properties         (NMPlatform *self, int ifindex, NMPlatformTunProperties *properties);
 gboolean nm_platform_macvlan_get_properties     (NMPlatform *self, int ifindex, NMPlatformMacvlanProperties *props);
 gboolean nm_platform_vxlan_get_properties       (NMPlatform *self, int ifindex, NMPlatformVxlanProperties *props);
-gboolean nm_platform_gre_get_properties         (NMPlatform *self, int ifindex, NMPlatformGreProperties *props);
+gboolean nm_platform_ip_tunnel_get_properties   (NMPlatform *self, NMLinkType type, int ifindex, NMPlatformIPTunnelProperties *props);
 
 gboolean    nm_platform_wifi_get_capabilities (NMPlatform *self, int ifindex, NMDeviceWifiCapabilities *caps);
 gboolean    nm_platform_wifi_get_bssid        (NMPlatform *self, int ifindex, guint8 *bssid);

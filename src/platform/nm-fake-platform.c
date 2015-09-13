@@ -728,7 +728,7 @@ vxlan_get_properties (NMPlatform *platform, int ifindex, NMPlatformVxlanProperti
 }
 
 static gboolean
-gre_get_properties (NMPlatform *platform, int ifindex, NMPlatformGreProperties *props)
+ip_tunnel_get_properties (NMPlatform *platform, NMLinkType link_type, int ifindex, NMPlatformIPTunnelProperties *props)
 {
 	return FALSE;
 }
@@ -1449,7 +1449,7 @@ nm_fake_platform_class_init (NMFakePlatformClass *klass)
 	platform_class->tun_get_properties = tun_get_properties;
 	platform_class->macvlan_get_properties = macvlan_get_properties;
 	platform_class->vxlan_get_properties = vxlan_get_properties;
-	platform_class->gre_get_properties = gre_get_properties;
+	platform_class->ip_tunnel_get_properties = ip_tunnel_get_properties;
 
 	platform_class->wifi_get_capabilities = wifi_get_capabilities;
 	platform_class->wifi_get_bssid = wifi_get_bssid;

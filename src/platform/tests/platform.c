@@ -460,11 +460,12 @@ do_vxlan_get_properties (char **argv)
 	return TRUE;
 }
 
+#if 0
 static gboolean
 do_gre_get_properties (char **argv)
 {
 	int ifindex = parse_ifindex (*argv++);
-	NMPlatformGreProperties props;
+	NMPlatformIPTunnelProperties props;
 	char addrstr[INET_ADDRSTRLEN];
 
 	if (!nm_platform_gre_get_properties (NM_PLATFORM_GET, ifindex, &props))
@@ -492,6 +493,7 @@ do_gre_get_properties (char **argv)
 
 	return TRUE;
 }
+#endif
 
 static gboolean
 do_ip4_address_get_all (char **argv)
@@ -828,8 +830,8 @@ static const command_t commands[] = {
 	  "<ifname/ifindex>" },
 	{ "vxlan-get-properties", "get vxlan properties", do_vxlan_get_properties, 1,
 	  "<ifname/ifindex>" },
-	{ "gre-get-properties", "get gre properties", do_gre_get_properties, 1,
-	  "<ifname/ifindex>" },
+	/* { "gre-get-properties", "get gre properties", do_gre_get_properties, 1,
+	  "<ifname/ifindex>" }, */
 	{ "ip4-address-get-all", "print all IPv4 addresses", do_ip4_address_get_all, 1, "<ifname/ifindex>" },
 	{ "ip6-address-get-all", "print all IPv6 addresses", do_ip6_address_get_all, 1, "<ifname/ifindex>" },
 	{ "ip4-address-add", "add IPv4 address", do_ip4_address_add, 4, "<ifname/ifindex> <address>/<plen> <lifetime> <>" },

@@ -3824,7 +3824,7 @@ static const struct nla_policy gre_info_policy[IFLA_GRE_MAX + 1] = {
 static int
 gre_info_data_parser (struct nlattr *info_data, gpointer parser_data)
 {
-	NMPlatformGreProperties *props = parser_data;
+	NMPlatformIPTunnelProperties *props = parser_data;
 	struct nlattr *tb[IFLA_GRE_MAX + 1];
 	int err;
 
@@ -3838,8 +3838,9 @@ gre_info_data_parser (struct nlattr *info_data, gpointer parser_data)
 	props->output_flags = nla_get_u16 (tb[IFLA_GRE_OFLAGS]);
 	props->input_key = (props->input_flags & GRE_KEY) ? nla_get_u32 (tb[IFLA_GRE_IKEY]) : 0;
 	props->output_key = (props->output_flags & GRE_KEY) ? nla_get_u32 (tb[IFLA_GRE_OKEY]) : 0;
-	props->local = nla_get_u32 (tb[IFLA_GRE_LOCAL]);
-	props->remote = nla_get_u32 (tb[IFLA_GRE_REMOTE]);
+	props->local4 = nla_get_u32 (tb[IFLA_GRE_LOCAL]);
+	props->remote4 = nla_get_u32 (tb[IFLA_GRE_REMOTE]);
+	props->encap = AF_INET;
 	props->tos = nla_get_u8 (tb[IFLA_GRE_TOS]);
 	props->ttl = nla_get_u8 (tb[IFLA_GRE_TTL]);
 	props->path_mtu_discovery = !!nla_get_u8 (tb[IFLA_GRE_PMTUDISC]);
@@ -3847,16 +3848,95 @@ gre_info_data_parser (struct nlattr *info_data, gpointer parser_data)
 	return 0;
 }
 
+static const struct nla_policy ip4_tunnel_info_policy[IFLA_IPTUN_MAX + 1] = {
+	[IFLA_IPTUN_LINK]     = { .type = NLA_U32 },
+	[IFLA_IPTUN_LOCAL]    = { .type = NLA_U32 },
+	[IFLA_IPTUN_REMOTE]   = { .type = NLA_U32 },
+	[IFLA_IPTUN_TTL]      = { .type = NLA_U8 },
+	[IFLA_IPTUN_TOS]      = { .type = NLA_U8 },
+	[IFLA_IPTUN_PMTUDISC] = { .type = NLA_U8 },
+};
+
+static int
+ip4_tunnel_info_data_parser (struct nlattr *info_data, gpointer parser_data)
+{
+	NMPlatformIPTunnelProperties *props = parser_data;
+	struct nlattr *tb[IFLA_IPTUN_MAX + 1];
+	int err;
+
+	err = nla_parse_nested (tb, IFLA_IPTUN_MAX, info_data,
+	                        (struct nla_policy *) gre_info_policy);
+	if (err < 0)
+		return err;
+
+	props->parent_ifindex = tb[IFLA_IPTUN_LINK] ? nla_get_u32 (tb[IFLA_IPTUN_LINK]) : 0;
+	props->local4 = nla_get_u32 (tb[IFLA_IPTUN_LOCAL]);
+	props->remote4 = nla_get_u32 (tb[IFLA_IPTUN_REMOTE]);
+	props->encap = AF_INET;
+	props->tos = nla_get_u8 (tb[IFLA_IPTUN_TOS]);
+	props->ttl = nla_get_u8 (tb[IFLA_IPTUN_TTL]);
+	props->path_mtu_discovery = !!nla_get_u8 (tb[IFLA_IPTUN_PMTUDISC]);
+
+	return 0;
+}
+
+static const struct nla_policy ip6_tunnel_info_policy[IFLA_IPTUN_MAX + 1] = {
+	[IFLA_IPTUN_LINK]     = { .type = NLA_U32 },
+	[IFLA_IPTUN_LOCAL]    = { .type = NLA_U32 },
+	[IFLA_IPTUN_REMOTE]   = { .type = NLA_U32 },
+	[IFLA_IPTUN_TTL]      = { .type = NLA_U8 },
+	[IFLA_IPTUN_TOS]      = { .type = NLA_U8 },
+	[IFLA_IPTUN_PMTUDISC] = { .type = NLA_U8 },
+};
+
+static int
+ip6_tunnel_info_data_parser (struct nlattr *info_data, gpointer parser_data)
+{
+	NMPlatformIPTunnelProperties *props = parser_data;
+	struct nlattr *tb[IFLA_IPTUN_MAX + 1];
+	int err;
+
+	err = nla_parse_nested (tb, IFLA_IPTUN_MAX, info_data,
+	                        (struct nla_policy *) ip6_tunnel_info_policy);
+	if (err < 0)
+		return err;
+
+	props->parent_ifindex = tb[IFLA_IPTUN_LINK] ? nla_get_u32 (tb[IFLA_IPTUN_LINK]) : 0;
+	nla_memcpy(&props->local6, tb[IFLA_IPTUN_LOCAL], sizeof(struct in6_addr));
+	nla_memcpy(&props->remote6, tb[IFLA_IPTUN_REMOTE], sizeof(struct in6_addr));
+	props->encap = AF_INET6;
+	props->tos = nla_get_u8 (tb[IFLA_IPTUN_TOS]);
+	props->ttl = nla_get_u8 (tb[IFLA_IPTUN_TTL]);
+	props->path_mtu_discovery = !!nla_get_u8 (tb[IFLA_IPTUN_PMTUDISC]);
+
+	return 0;
+}
+
 static gboolean
-gre_get_properties (NMPlatform *platform, int ifindex, NMPlatformGreProperties *props)
+ip_tunnel_get_properties (NMPlatform *platform, NMLinkType type, int ifindex, NMPlatformIPTunnelProperties *props)
 {
 	NMLinuxPlatformPrivate *priv = NM_LINUX_PLATFORM_GET_PRIVATE (platform);
 	int err;
 
-	err = _nl_link_parse_info_data (priv->nlh, ifindex,
-	                                gre_info_data_parser, props);
+	switch (type) {
+	case NM_LINK_TYPE_GRE:
+		err = _nl_link_parse_info_data (priv->nlh, ifindex, gre_info_data_parser, props);
+		break;
+	case NM_LINK_TYPE_SIT:
+	case NM_LINK_TYPE_IPIP:
+		err = _nl_link_parse_info_data (priv->nlh, ifindex, ip4_tunnel_info_data_parser, props);
+		break;
+	case NM_LINK_TYPE_IPIP6:
+	case NM_LINK_TYPE_IP6IP6:
+		err = _nl_link_parse_info_data (priv->nlh, ifindex, ip6_tunnel_info_data_parser, props);
+		break;
+	default:
+		_LOGW ("(%s) unsupported link type %d", nm_platform_link_get_name (platform, ifindex), (int) type);
+		return FALSE;
+	}
+
 	if (err != 0) {
-		_LOGW ("(%s) could not read gre properties: %s",
+		_LOGW ("(%s) could not read IP tunnel properties: %s",
 		       nm_platform_link_get_name (platform, ifindex), nl_geterror (err));
 	}
 	return (err == 0);
@@ -5112,7 +5192,7 @@ nm_linux_platform_class_init (NMLinuxPlatformClass *klass)
 	platform_class->tun_get_properties = tun_get_properties;
 	platform_class->macvlan_get_properties = macvlan_get_properties;
 	platform_class->vxlan_get_properties = vxlan_get_properties;
-	platform_class->gre_get_properties = gre_get_properties;
+	platform_class->ip_tunnel_get_properties = ip_tunnel_get_properties;
 
 	platform_class->wifi_get_capabilities = wifi_get_capabilities;
 	platform_class->wifi_get_bssid = wifi_get_bssid;

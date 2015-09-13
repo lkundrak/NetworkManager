@@ -1725,14 +1725,14 @@ nm_platform_vxlan_get_properties (NMPlatform *self, int ifindex, NMPlatformVxlan
 }
 
 gboolean
-nm_platform_gre_get_properties (NMPlatform *self, int ifindex, NMPlatformGreProperties *props)
+nm_platform_ip_tunnel_get_properties (NMPlatform *self, NMLinkType type, int ifindex, NMPlatformIPTunnelProperties *props)
 {
 	_CHECK_SELF (self, klass, FALSE);
 
 	g_return_val_if_fail (ifindex > 0, FALSE);
 	g_return_val_if_fail (props != NULL, FALSE);
 
-	return klass->gre_get_properties (self, ifindex, props);
+	return klass->ip_tunnel_get_properties (self, type, ifindex, props);
 }
 
 gboolean
