@@ -21,7 +21,7 @@
 #ifndef __NETWORKMANAGER_DEVICE_IP_TUNNEL_H__
 #define __NETWORKMANAGER_DEVICE_IP_TUNNEL_H__
 
-#include "nm-device-generic.h"
+#include "nm-device.h"
 
 G_BEGIN_DECLS
 

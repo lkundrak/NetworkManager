@@ -677,7 +677,10 @@ static const LinkDesc linktypes[] = {
 	{ NM_LINK_TYPE_WIMAX,         "wimax",       "wimax",       "wimax" },
 
 	{ NM_LINK_TYPE_DUMMY,         "dummy",       "dummy",       NULL },
+	{ NM_LINK_TYPE_IPIP,          "ipip",        "ipip",        NULL },
 	{ NM_LINK_TYPE_GRE,           "gre",         "gre",         NULL },
+	{ NM_LINK_TYPE_SIT,           "sit",         "sit",         NULL },
+	{ NM_LINK_TYPE_IP6TNL,        "ip6tnl",      "ip6tnl",      NULL },
 	{ NM_LINK_TYPE_GRETAP,        "gretap",      "gretap",      NULL },
 	{ NM_LINK_TYPE_IFB,           "ifb",         "ifb",         NULL },
 	{ NM_LINK_TYPE_LOOPBACK,      "loopback",    NULL,          NULL },
@@ -3248,7 +3251,7 @@ ip4_tunnel_add (NMPlatform *platform,
 
 static int
 ip6_tunnel_add (NMPlatform *platform,
-                NMLinkType type,
+                int proto,
                 const char *name,
                 struct in6_addr *local,
                 struct in6_addr *remote,
@@ -3257,20 +3260,16 @@ ip6_tunnel_add (NMPlatform *platform,
 {
 	auto_nl_object struct rtnl_link *rtnllink;
 
-	_LOGD ("link: add ip6 tunnel '%s' type %d", name, (int) type);
+	_LOGD ("link: add ip6 tunnel '%s' proto %d", name, proto);
 
-	if (type == NM_LINK_TYPE_IP6GRE) {
-		_LOGW ("link: IP6GRE creation not supported");
-		return FALSE;
-	}
-
-	rtnllink = (struct rtnl_link *) build_rtnl_link (0, name, type);
+	rtnllink = _nl_rtnl_link_alloc (0, name);
+	rtnl_link_set_type (rtnllink, "ip6tnl");
 	rtnl_link_ip6_tnl_set_local (rtnllink, local);
 	rtnl_link_ip6_tnl_set_remote (rtnllink, remote);
 	rtnl_link_ip6_tnl_set_ttl (rtnllink, ttl);
-	rtnl_link_ip6_tnl_set_proto (rtnllink, type == NM_LINK_TYPE_IPIP6 ? IPPROTO_IPIP : IPPROTO_IPV6);
+	rtnl_link_ip6_tnl_set_proto (rtnllink, proto);
 
-	return do_add_link_with_lookup (platform, name, rtnllink, type, out_link);
+	return do_add_link_with_lookup (platform, name, rtnllink, NM_LINK_TYPE_IP6TNL, out_link);
 }
 
 static gboolean
@@ -3855,6 +3854,10 @@ static const struct nla_policy ip4_tunnel_info_policy[IFLA_IPTUN_MAX + 1] = {
 	[IFLA_IPTUN_TTL]      = { .type = NLA_U8 },
 	[IFLA_IPTUN_TOS]      = { .type = NLA_U8 },
 	[IFLA_IPTUN_PMTUDISC] = { .type = NLA_U8 },
+	[IFLA_IPTUN_ENCAP_TYPE] = { .type = NLA_U16 },
+	[IFLA_IPTUN_ENCAP_FLAGS] = { .type = NLA_U16 },
+	[IFLA_IPTUN_ENCAP_SPORT] = { .type = NLA_U16 },
+	[IFLA_IPTUN_ENCAP_DPORT] = { .type = NLA_U16 },
 };
 
 static int
@@ -3865,7 +3868,7 @@ ip4_tunnel_info_data_parser (struct nlattr *info_data, gpointer parser_data)
 	int err;
 
 	err = nla_parse_nested (tb, IFLA_IPTUN_MAX, info_data,
-	                        (struct nla_policy *) gre_info_policy);
+	                        (struct nla_policy *) ip4_tunnel_info_policy);
 	if (err < 0)
 		return err;
 
@@ -3885,8 +3888,11 @@ static const struct nla_policy ip6_tunnel_info_policy[IFLA_IPTUN_MAX + 1] = {
 	[IFLA_IPTUN_LOCAL]    = { .type = NLA_U32 },
 	[IFLA_IPTUN_REMOTE]   = { .type = NLA_U32 },
 	[IFLA_IPTUN_TTL]      = { .type = NLA_U8 },
-	[IFLA_IPTUN_TOS]      = { .type = NLA_U8 },
-	[IFLA_IPTUN_PMTUDISC] = { .type = NLA_U8 },
+
+	[IFLA_IPTUN_ENCAP_LIMIT] = { .type = NLA_U8 },
+	[IFLA_IPTUN_FLOWINFO] = { .type = NLA_U32 },
+	[IFLA_IPTUN_FLAGS] = { .type = NLA_U32 },
+	[IFLA_IPTUN_PROTO] = { .type = NLA_U8 },
 };
 
 static int
@@ -3905,9 +3911,7 @@ ip6_tunnel_info_data_parser (struct nlattr *info_data, gpointer parser_data)
 	nla_memcpy(&props->local6, tb[IFLA_IPTUN_LOCAL], sizeof(struct in6_addr));
 	nla_memcpy(&props->remote6, tb[IFLA_IPTUN_REMOTE], sizeof(struct in6_addr));
 	props->encap = AF_INET6;
-	props->tos = nla_get_u8 (tb[IFLA_IPTUN_TOS]);
 	props->ttl = nla_get_u8 (tb[IFLA_IPTUN_TTL]);
-	props->path_mtu_discovery = !!nla_get_u8 (tb[IFLA_IPTUN_PMTUDISC]);
 
 	return 0;
 }
@@ -3926,8 +3930,7 @@ ip_tunnel_get_properties (NMPlatform *platform, NMLinkType type, int ifindex, NM
 	case NM_LINK_TYPE_IPIP:
 		err = _nl_link_parse_info_data (priv->nlh, ifindex, ip4_tunnel_info_data_parser, props);
 		break;
-	case NM_LINK_TYPE_IPIP6:
-	case NM_LINK_TYPE_IP6IP6:
+	case NM_LINK_TYPE_IP6TNL:
 		err = _nl_link_parse_info_data (priv->nlh, ifindex, ip6_tunnel_info_data_parser, props);
 		break;
 	default:

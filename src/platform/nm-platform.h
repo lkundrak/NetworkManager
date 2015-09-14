@@ -491,7 +491,7 @@ typedef struct {
 
 	gboolean (*ip4_tunnel_add) (NMPlatform *, NMLinkType type, const char *name, in_addr_t local, in_addr_t remote, guint8 ttl,
 	                            NMPlatformLink *out_link);
-	gboolean (*ip6_tunnel_add) (NMPlatform *, NMLinkType type, const char *name, struct in6_addr *local, struct in6_addr *remote, guint8 ttl,
+	gboolean (*ip6_tunnel_add) (NMPlatform *, int proto, const char *name, struct in6_addr *local, struct in6_addr *remote, guint8 ttl,
 	                            NMPlatformLink *out_link);
 
 	gboolean (*infiniband_partition_add) (NMPlatform *, int parent, int p_key, NMPlatformLink *out_link);
@@ -710,7 +710,7 @@ gboolean    nm_platform_mesh_set_ssid         (NMPlatform *self, int ifindex, co
 
 NMPlatformError nm_platform_ip4_tunnel_add (NMPlatform *self, NMLinkType type, const char *name, in_addr_t local, in_addr_t remote,
                                             guint8 ttl, NMPlatformLink *out_link);
-NMPlatformError nm_platform_ip6_tunnel_add (NMPlatform *self, NMLinkType type, const char *name,
+NMPlatformError nm_platform_ip6_tunnel_add (NMPlatform *self, int proto, const char *name,
                                             struct in6_addr *local, struct in6_addr *remote,
                                             guint8 ttl, NMPlatformLink *out_link);
 

@@ -1610,7 +1610,7 @@ nm_platform_ip4_tunnel_add (NMPlatform *self,
  */
 NMPlatformError
 nm_platform_ip6_tunnel_add (NMPlatform *self,
-                            NMLinkType type,
+                            int proto,
                             const char *name,
                             struct in6_addr *local,
                             struct in6_addr *remote,
@@ -1625,12 +1625,12 @@ nm_platform_ip6_tunnel_add (NMPlatform *self,
 	g_return_val_if_fail (name, NM_PLATFORM_ERROR_BUG);
 	g_return_val_if_fail (klass->ip6_tunnel_add, NM_PLATFORM_ERROR_BUG);
 
-	plerr = _link_add_check_existing (self, name, type, out_link);
+	plerr = _link_add_check_existing (self, name, NM_LINK_TYPE_IP6TNL, out_link);
 	if (plerr != NM_PLATFORM_ERROR_SUCCESS)
 		return plerr;
 
-	_LOGD ("link: adding ip6 tunnel '%s' type %d", name, type);
-	if (!klass->ip6_tunnel_add (self, type, name, local, remote, ttl, out_link))
+	_LOGD ("link: adding ip6 tunnel '%s' proto %d", name, proto);
+	if (!klass->ip6_tunnel_add (self, proto, name, local, remote, ttl, out_link))
 		return NM_PLATFORM_ERROR_UNSPECIFIED;
 	return NM_PLATFORM_ERROR_SUCCESS;
 }
