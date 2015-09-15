@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <netinet/icmp6.h>
@@ -3202,6 +3203,62 @@ vlan_set_egress_map (NMPlatform *platform, int ifindex, int from, int to)
 	return do_change_link (platform, change, TRUE) == NM_PLATFORM_ERROR_SUCCESS;
 }
 
+static int
+tun_add (NMPlatform *platform, const char *name, gboolean tap,
+         gint64 user, gint64 group, gboolean pi, gboolean vnet_hdr,
+         gboolean multi_queue, NMPlatformLink *out_link)
+{
+	const NMPObject *obj;
+	struct ifreq ifr = { };
+	int fd;
+
+	_LOGD ("link: add %s '%s' user %" G_GINT64_FORMAT " group %" G_GINT64_FORMAT,
+	       tap ? "tap" : "tun", name, user, group);
+
+	fd = open("/dev/net/tun", O_RDWR);
+	if (fd < 0)
+		return FALSE;
+
+	strncpy (ifr.ifr_name, name, IFNAMSIZ);
+	ifr.ifr_flags = tap ? IFF_TAP : IFF_TUN;
+
+	if (!pi)
+		ifr.ifr_flags |= IFF_NO_PI;
+	if (vnet_hdr)
+		ifr.ifr_flags |= IFF_VNET_HDR;
+	if (multi_queue)
+		ifr.ifr_flags |= IFF_MULTI_QUEUE;
+
+	if (ioctl(fd, TUNSETIFF, &ifr)) {
+		close (fd);
+		return FALSE;
+	}
+
+	if (user >= 0 && user < G_MAXINT32) {
+		if (ioctl (fd, TUNSETOWNER, (uid_t) user)) {
+			close (fd);
+			return FALSE;
+		}
+	}
+
+	if (group >= 0 && group < G_MAXINT32) {
+		if (ioctl (fd, TUNSETGROUP, (gid_t) group)) {
+			close (fd);
+			return FALSE;
+		}
+	}
+
+	do_request_link (platform, 0, name, TRUE);
+	obj = nmp_cache_lookup_link_full (NM_LINUX_PLATFORM_GET_PRIVATE (platform)->cache,
+	                                  0, name, FALSE,
+	                                  tap ? NM_LINK_TYPE_TAP : NM_LINK_TYPE_TUN,
+	                                  NULL, NULL);
+	if (out_link && obj)
+		*out_link = obj->link;
+
+	return TRUE;
+}
+
 static gboolean
 link_enslave (NMPlatform *platform, int master, int slave)
 {
@@ -5033,6 +5090,8 @@ nm_linux_platform_class_init (NMLinuxPlatformClass *klass)
 	platform_class->vlan_get_info = vlan_get_info;
 	platform_class->vlan_set_ingress_map = vlan_set_ingress_map;
 	platform_class->vlan_set_egress_map = vlan_set_egress_map;
+
+	platform_class->tun_add = tun_add;
 
 	platform_class->infiniband_partition_add = infiniband_partition_add;
 	platform_class->infiniband_get_info = infiniband_get_info;
