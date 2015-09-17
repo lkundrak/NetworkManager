@@ -1657,8 +1657,6 @@ connection_updated (NMSettings *settings,
 {
 	NMPolicy *policy = (NMPolicy *) user_data;
 
-	firewall_update_zone (policy, connection);
-
 	schedule_activate_all (policy);
 }
 
@@ -1667,8 +1665,11 @@ connection_updated_by_user (NMSettings *settings,
                             NMSettingsConnection *connection,
                             gpointer user_data)
 {
+	NMPolicy *policy = (NMPolicy *) user_data;
+
 	/* Reset auto retries back to default since connection was updated */
 	nm_settings_connection_reset_autoconnect_retries (connection);
+	firewall_update_zone (policy, NM_CONNECTION (connection));
 }
 
 static void
