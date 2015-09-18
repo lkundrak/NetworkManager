@@ -1578,7 +1578,7 @@ nm_setting_ip_config_remove_dns_option_by_value (NMSettingIPConfig *setting,
  *
  * Removes all configured DNS options.
  *
- * Since: 1..0.8
+ * Since: 1.0.8
  **/
 void
 nm_setting_ip_config_clear_dns_options (NMSettingIPConfig *setting)
