@@ -8813,6 +8813,53 @@ NM_UTILS_FLAGS2STR_DEFINE (nm_unmanaged_flags2str, NMUnmanagedFlags,
 	NM_UTILS_FLAGS2STR (NM_UNMANAGED_EXTERNAL_DOWN, "external-down"),
 );
 
+static const char *
+_unmanaged_flags2str (NMUnmanagedFlags flags, NMUnmanagedFlags mask, char *buf, gsize len)
+{
+	char buf2[512];
+	char *b;
+	char *tmp, *tmp2;
+	gsize l;
+
+	nm_utils_to_string_buffer_init (&buf, &len);
+	if (!len)
+		return buf;
+
+	b = buf;
+
+	mask |= flags;
+
+	nm_unmanaged_flags2str (flags, b, len);
+	l = strlen (b);
+	b += l;
+	len -= l;
+
+	nm_unmanaged_flags2str (mask & ~flags, buf2, sizeof (buf2));
+	if (buf2[0]) {
+		gboolean add_separator = l > 0;
+
+		tmp = buf2;
+		while (TRUE) {
+			if (add_separator)
+				nm_utils_strbuf_append_c (&b, &len, ',');
+			add_separator = TRUE;
+
+			tmp2 = strchr (tmp, ',');
+			if (tmp2)
+				tmp2[0] = '\0';
+
+			nm_utils_strbuf_append_c (&b, &len, '!');
+			nm_utils_strbuf_append_str (&b, &len, tmp);
+			if (!tmp2)
+				break;
+
+			tmp = &tmp2[1];
+		}
+	}
+
+	return buf;
+}
+
 static gboolean
 _get_managed_by_flags(NMUnmanagedFlags flags, NMUnmanagedFlags mask, gboolean for_user_request)
 {
@@ -8952,9 +8999,8 @@ _set_unmanaged_flags (NMDevice *self,
 	gboolean was_managed, transition_state;
 	NMUnmanagedFlags old_flags, old_mask;
 	const char *operation = NULL;
-	char str1[128];
-	char str2[128];
-	char str3[128];
+	char str1[512];
+	char str2[512];
 
 	g_return_if_fail (NM_IS_DEVICE (self));
 	g_return_if_fail (flags);
@@ -8998,10 +9044,10 @@ _set_unmanaged_flags (NMDevice *self,
 	                       || (   !was_managed
 	                           && nm_device_get_state (self) == NM_DEVICE_STATE_UNMANAGED));
 
-#define _FMTX "[%s%s0x%0x]/0x%x/%s"
+#define _FMTX "[%s%s0x%0x/0x%x/%s"
 #define _FMT(flags, mask, str) \
-	nm_unmanaged_flags2str ((flags), str, sizeof (str)), \
-	(flags) ? "=" : "", \
+	_unmanaged_flags2str ((flags), (mask), str, sizeof (str)), \
+	((flags) | (mask)) ? "=" : "", \
 	(flags), \
 	(mask), \
 	(_get_managed_by_flags (flags, mask, FALSE) \
@@ -9009,12 +9055,11 @@ _set_unmanaged_flags (NMDevice *self,
 	     : (_get_managed_by_flags (flags, mask, TRUE) \
 	            ? "manageable" \
 	            : "unmanaged"))
-	_LOGD (LOGD_DEVICE, "unmanaged: flags set to "_FMTX"%s (was "_FMTX", %s [%s=0x%0x]%s%s%s)",
+	_LOGD (LOGD_DEVICE, "unmanaged: flags set to "_FMTX"%s, %s [%s=0x%0x]%s%s%s)",
 	       _FMT (priv->unmanaged_flags, priv->unmanaged_mask, str1),
 	       priv->real ? "" : "/unrealized",
-	       _FMT (old_flags, old_mask, str2),
 	       operation,
-	       nm_unmanaged_flags2str (flags, str3, sizeof (str3)),
+	       nm_unmanaged_flags2str (flags, str2, sizeof (str2)),
 	       flags,
 	       NM_PRINT_FMT_QUOTED (allow_state_transition,
 	                            ", reason ",
