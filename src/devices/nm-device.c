@@ -1185,6 +1185,9 @@ nm_device_master_release_one_slave (NMDevice *self, NMDevice *slave, gboolean co
 	 * when slaves change.
 	 */
 	nm_device_update_hw_address (self);
+
+	g_warn_if_fail (NM_FLAGS_HAS (slave_priv->unmanaged_mask, NM_UNMANAGED_IS_SLAVE));
+	nm_device_set_unmanaged_by_flags (slave, NM_UNMANAGED_IS_SLAVE, NM_UNMAN_FLAG_OP_FORGET, NM_DEVICE_STATE_REASON_REMOVED);
 }
 
 /**
@@ -2096,7 +2099,8 @@ nm_device_unrealize (NMDevice *self, gboolean remove_resources, GError **error)
 	                               NM_UNMANAGED_PARENT |
 	                               NM_UNMANAGED_LOOPBACK |
 	                               NM_UNMANAGED_USER_UDEV |
-	                               NM_UNMANAGED_EXTERNAL_DOWN,
+	                               NM_UNMANAGED_EXTERNAL_DOWN |
+	                               NM_UNMANAGED_IS_SLAVE,
 	                               NM_UNMAN_FLAG_OP_FORGET);
 
 	nm_device_state_changed (self,
@@ -2277,6 +2281,9 @@ nm_device_master_add_slave (NMDevice *self, NMDevice *slave, gboolean configure)
 		 *
 		 * because slave_priv->is_enslaved is not true, thus the value
 		 * didn't change yet. */
+
+		g_warn_if_fail (!NM_FLAGS_HAS (slave_priv->unmanaged_mask, NM_UNMANAGED_IS_SLAVE));
+		nm_device_set_unmanaged_by_flags (slave, NM_UNMANAGED_IS_SLAVE, FALSE, NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED);
 	} else
 		g_return_if_fail (slave_priv->master == self);
 
@@ -8811,6 +8818,7 @@ NM_UTILS_FLAGS2STR_DEFINE (nm_unmanaged_flags2str, NMUnmanagedFlags,
 	NM_UTILS_FLAGS2STR (NM_UNMANAGED_USER_CONFIG, "user-config"),
 	NM_UTILS_FLAGS2STR (NM_UNMANAGED_USER_UDEV, "user-udev"),
 	NM_UTILS_FLAGS2STR (NM_UNMANAGED_EXTERNAL_DOWN, "external-down"),
+	NM_UTILS_FLAGS2STR (NM_UNMANAGED_IS_SLAVE, "is-slave"),
 );
 
 static const char *
@@ -8913,6 +8921,12 @@ _get_managed_by_flags(NMUnmanagedFlags flags, NMUnmanagedFlags mask, gboolean fo
 		 * NM_UNMANAGED_USER_UDEV doesn't change the outcome.
 		 * Just be explicit about this. */
 		flags &= ~NM_UNMANAGED_USER_UDEV;
+	}
+
+	if (   NM_FLAGS_HAS (mask, NM_UNMANAGED_IS_SLAVE)
+	    && !NM_FLAGS_HAS (flags, NM_UNMANAGED_IS_SLAVE)) {
+		/* for an enslaved device, by-default doesn't matter */
+		flags &= ~NM_UNMANAGED_BY_DEFAULT;
 	}
 
 	if (NM_FLAGS_HAS (mask, NM_UNMANAGED_USER_EXPLICIT)) {

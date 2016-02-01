@@ -435,6 +435,9 @@ RfKillType nm_device_get_rfkill_type (NMDevice *device);
  * @NM_UNMANAGED_USER_CONFIG: %TRUE when unmanaged by user decision (via unmanaged-specs)
  * @NM_UNMANAGED_USER_UDEV: %TRUE when unmanaged by user decision (via UDev rule)
  * @NM_UNMANAGED_EXTERNAL_DOWN: %TRUE when unmanaged because !IFF_UP and not created by NM
+ * @NM_UNMANAGED_IS_SLAVE: indicates that the device is enslaved. Note that
+ *   setting the NM_UNMANAGED_IS_SLAVE to %TRUE makes no sense, this flag has only
+ *   meaning to set a slave device as managed if the parent is managed too.
  */
 typedef enum { /*< skip >*/
 	NM_UNMANAGED_NONE          = 0,
@@ -454,6 +457,7 @@ typedef enum { /*< skip >*/
 	NM_UNMANAGED_USER_CONFIG   = (1LL <<  9),
 	NM_UNMANAGED_USER_UDEV     = (1LL << 10),
 	NM_UNMANAGED_EXTERNAL_DOWN = (1LL << 11),
+	NM_UNMANAGED_IS_SLAVE      = (1LL << 12),
 
 } NMUnmanagedFlags;
 
