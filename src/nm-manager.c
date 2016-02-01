@@ -1663,43 +1663,63 @@ assume_connection (NMManager *self, NMDevice *device, NMSettingsConnection *conn
 	return TRUE;
 }
 
-static void
-recheck_assume_connection (NMDevice *device, NMManager *self)
+static gboolean
+recheck_assume_connection (NMManager *self, NMDevice *device)
 {
 	NMSettingsConnection *connection;
-	gboolean success, generated;
+	gboolean was_unmanaged = FALSE, success, generated = FALSE;
 	NMDeviceState state;
 
-	g_return_if_fail (NM_IS_MANAGER (self));
-	g_return_if_fail (NM_IS_DEVICE (device));
+	g_return_val_if_fail (NM_IS_MANAGER (self), FALSE);
+	g_return_val_if_fail (NM_IS_DEVICE (device), FALSE);
 
 	if (nm_device_get_is_nm_owned (device))
-		return;
+		return FALSE;
 
 	if (!nm_device_get_managed (device, FALSE))
-		return;
+		return FALSE;
 
 	state = nm_device_get_state (device);
-
-	g_return_if_fail (state > NM_DEVICE_STATE_UNMANAGED);
-
 	if (state > NM_DEVICE_STATE_DISCONNECTED)
-		return;
+		return FALSE;
 
 	connection = get_existing_connection (self, device, &generated);
 	if (!connection) {
 		nm_log_dbg (LOGD_DEVICE, "(%s): can't assume; no connection",
 		            nm_device_get_iface (device));
-		return;
+		return FALSE;
+	}
+
+	if (state == NM_DEVICE_STATE_UNMANAGED) {
+		was_unmanaged = TRUE;
+		nm_device_state_changed (device,
+		                         NM_DEVICE_STATE_UNAVAILABLE,
+		                         NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED);
 	}
 
 	success = assume_connection (self, device, connection);
-	if (!success && generated) {
-		nm_log_dbg (LOGD_DEVICE, "(%s): connection assumption failed. Deleting generated connection",
-		            nm_device_get_iface (device));
+	if (!success) {
+		if (was_unmanaged) {
+			nm_device_state_changed (device,
+			                         NM_DEVICE_STATE_UNAVAILABLE,
+			                         NM_DEVICE_STATE_REASON_CONFIG_FAILED);
+		}
 
-		nm_settings_connection_delete (connection, NULL, NULL);
+		if (generated) {
+			nm_log_dbg (LOGD_DEVICE, "(%s): connection assumption failed. Deleting generated connection",
+			            nm_device_get_iface (device));
+
+			nm_settings_connection_delete (connection, NULL, NULL);
+		}
 	}
+
+	return success;
+}
+
+static void
+recheck_assume_connection_cb (NMDevice *device, gpointer user_data)
+{
+	recheck_assume_connection (user_data, device);
 }
 
 static void
@@ -1747,6 +1767,28 @@ device_realized (NMDevice *device,
 	/* Emit D-Bus signals */
 	g_signal_emit (self, signals[DEVICE_ADDED], 0, device);
 	g_object_notify (G_OBJECT (self), NM_MANAGER_DEVICES);
+}
+
+static void
+_device_realize_finish (NMManager *self, NMDevice *device, const NMPlatformLink *plink)
+{
+	g_return_if_fail (NM_IS_MANAGER (self));
+	g_return_if_fail (NM_IS_DEVICE (device));
+
+	nm_device_realize_finish (device, plink);
+
+	if (!nm_device_get_managed (device, FALSE))
+		return;
+
+	if (recheck_assume_connection (self, device))
+		return;
+
+	/* if we failed to assume a connection for the managed device, but the device
+	 * is still unavailable. Set UNAVAILABLE state again, this time with NOW_MANAGED. */
+	nm_device_state_changed (device,
+	                         NM_DEVICE_STATE_UNAVAILABLE,
+	                         NM_DEVICE_STATE_REASON_NOW_MANAGED);
+	nm_device_emit_recheck_auto_activate (device);
 }
 
 /**
@@ -1809,7 +1851,7 @@ add_device (NMManager *self, NMDevice *device, GError **error)
 	                  self);
 
 	g_signal_connect (device, NM_DEVICE_RECHECK_ASSUME,
-	                  G_CALLBACK (recheck_assume_connection),
+	                  G_CALLBACK (recheck_assume_connection_cb),
 	                  self);
 
 	g_signal_connect (device, "notify::" NM_DEVICE_IP_IFACE,
@@ -1880,11 +1922,14 @@ factory_device_added_cb (NMDeviceFactory *factory,
                          NMDevice *device,
                          gpointer user_data)
 {
+	NMManager *self = user_data;
 	GError *error = NULL;
 
+	g_return_if_fail (NM_IS_MANAGER (self));
+
 	if (nm_device_realize_start (device, NULL, NULL, &error)) {
-		add_device (NM_MANAGER (user_data), device, NULL);
-		nm_device_realize_finish (device, NULL);
+		add_device (self, device, NULL);
+		_device_realize_finish (self, device, NULL);
 	} else {
 		nm_log_warn (LOGD_DEVICE, "(%s): failed to realize device: %s",
 		             nm_device_get_iface (device), error->message);
@@ -1956,7 +2001,7 @@ platform_link_added (NMManager *self,
 			return;
 		} else if (nm_device_realize_start (candidate, plink, &compatible, &error)) {
 			/* Success */
-			nm_device_realize_finish (candidate, plink);
+			_device_realize_finish (self, candidate, plink);
 			return;
 		}
 
@@ -2005,7 +2050,7 @@ platform_link_added (NMManager *self,
 			nm_device_set_nm_plugin_missing (device, TRUE);
 		if (nm_device_realize_start (device, plink, NULL, &error)) {
 			add_device (self, device, NULL);
-			nm_device_realize_finish (device, plink);
+			_device_realize_finish (self, device, plink);
 		} else {
 			nm_log_warn (LOGD_DEVICE, "%s: failed to realize device: %s",
 			             plink->name, error->message);

@@ -77,7 +77,6 @@ static NMActStageReturn dhcp4_start (NMDevice *self, NMConnection *connection, N
 static gboolean dhcp6_start (NMDevice *self, gboolean wait_for_ll, NMDeviceStateReason *reason);
 static void nm_device_start_ip_check (NMDevice *self);
 static void realize_start_setup (NMDevice *self, const NMPlatformLink *plink);
-static void realize_finish (NMDevice *self, const NMPlatformLink *plink, gboolean now_managed);
 
 G_DEFINE_ABSTRACT_TYPE (NMDevice, nm_device, NM_TYPE_EXPORTED_OBJECT)
 
@@ -1729,7 +1728,11 @@ nm_device_create_and_realize (NMDevice *self,
 	}
 
 	realize_start_setup (self, plink);
-	realize_finish (self, plink, TRUE);
+	nm_device_realize_finish (self, plink);
+
+	nm_device_state_changed (self,
+	                         NM_DEVICE_STATE_UNAVAILABLE,
+	                         NM_DEVICE_STATE_REASON_NOW_MANAGED);
 
 	g_return_val_if_fail (nm_device_check_connection_compatible (self, connection), TRUE);
 	return TRUE;
@@ -1922,8 +1925,17 @@ realize_start_setup (NMDevice *self, const NMPlatformLink *plink)
 	                               plink && !plink->initialized);
 }
 
+/**
+ * nm_device_realize_finish():
+ * @self: the #NMDevice
+ * @plink: the #NMPlatformLink if backed by a kernel netdevice
+ *
+ * Update the device's master/slave or parent/child relationships from
+ * backing resource properties.  After this function finishes, the device
+ * is ready for network connectivity.
+ */
 void
-realize_finish (NMDevice *self, const NMPlatformLink *plink, gboolean now_managed)
+nm_device_realize_finish (NMDevice *self, const NMPlatformLink *plink)
 {
 	NMDevicePrivate *priv;
 
@@ -1944,37 +1956,6 @@ realize_finish (NMDevice *self, const NMPlatformLink *plink, gboolean now_manage
 
 	/* Balanced by a freeze in realize_start_setup(). */
 	g_object_thaw_notify (G_OBJECT (self));
-
-	if (!nm_device_get_managed (self, FALSE))
-		return;
-
-	nm_device_state_changed (self,
-	                         NM_DEVICE_STATE_UNAVAILABLE,
-	                         now_managed
-	                             ? NM_DEVICE_STATE_REASON_NOW_MANAGED
-	                             : NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED);
-
-	if (!now_managed) {
-		_LOGD (LOGD_DEVICE, "emit RECHECK_ASSUME signal");
-		g_signal_emit (self, signals[RECHECK_ASSUME], 0);
-	}
-
-	g_object_notify (G_OBJECT (self), NM_DEVICE_AUTOCONNECT);
-}
-
-/**
- * nm_device_realize_finish():
- * @self: the #NMDevice
- * @plink: the #NMPlatformLink if backed by a kernel netdevice
- *
- * Update the device's master/slave or parent/child relationships from
- * backing resource properties.  After this function finishes, the device
- * is ready for network connectivity.
- */
-void
-nm_device_realize_finish (NMDevice *self, const NMPlatformLink *plink)
-{
-	realize_finish (self, plink, FALSE);
 }
 
 static void
@@ -10143,18 +10124,18 @@ _set_state_full (NMDevice *self,
 	old_state = priv->state;
 
 	/* Do nothing if state isn't changing, but as a special case allow
-	 * re-setting UNAVAILABLE if the device is missing firmware so that we
-	 * can retry device initialization.
+	 * re-setting UNAVAILABLE.
 	 */
 	if (   (priv->state == state)
-	    && !(state == NM_DEVICE_STATE_UNAVAILABLE && priv->firmware_missing)) {
-		_LOGD (LOGD_DEVICE, "device state change: %s -> %s (reason '%s') [%d %d %d] (skip due to missing firmware)",
+	    && state != NM_DEVICE_STATE_UNAVAILABLE) {
+		_LOGD (LOGD_DEVICE, "device state change: %s -> %s (reason '%s') [%d %d %d]%s",
 		       state_to_string (old_state),
 		       state_to_string (state),
 		       reason_to_string (reason),
 		       old_state,
 		       state,
-		       reason);
+		       reason,
+		       priv->firmware_missing ? " (missing firmware)" : "");
 		return;
 	}
 
@@ -11049,6 +11030,7 @@ set_property (GObject *object, guint prop_id,
 		nm_device_set_autoconnect (self, g_value_get_boolean (value));
 		break;
 	case PROP_FIRMWARE_MISSING:
+		/* construct only */
 		priv->firmware_missing = g_value_get_boolean (value);
 		break;
 	case PROP_NM_PLUGIN_MISSING:
