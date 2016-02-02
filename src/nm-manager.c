@@ -2777,12 +2777,6 @@ _internal_activate_device (NMManager *self, NMActiveConnection *active, GError *
 			g_prefix_error (error, "%s failed to create resources: ", nm_device_get_iface (device));
 			return FALSE;
 		}
-
-		/* when creating the software device, it can happen that the device is
-		 * still unmanaged by NM_UNMANAGED_PLATFORM_INIT because we didn't yet
-		 * get the udev event. At this point, we can no longer delay the activation
-		 * and force the device to be managed. */
-		nm_device_set_unmanaged_flags (device, NM_UNMANAGED_PLATFORM_INIT, FALSE);
 	}
 
 	/* Try to find the master connection/device if the connection has a dependency */
@@ -2843,10 +2837,13 @@ _internal_activate_device (NMManager *self, NMActiveConnection *active, GError *
 	if (existing)
 		nm_device_steal_connection (existing, connection);
 
-	nm_device_set_unmanaged_by_flags (device,
-	                                  NM_UNMANAGED_USER_EXPLICIT,
-	                                  FALSE,
-	                                  NM_DEVICE_STATE_REASON_USER_REQUESTED);
+	/* when creating the software device, it can happen that the device is
+	 * still unmanaged by NM_UNMANAGED_PLATFORM_INIT because we didn't yet
+	 * get the udev event. At this point, we can no longer delay the activation
+	 * and force the device to be managed. */
+	nm_device_set_unmanaged_by_flags (device, NM_UNMANAGED_PLATFORM_INIT, FALSE, NM_DEVICE_STATE_REASON_USER_REQUESTED);
+
+	nm_device_set_unmanaged_by_flags (device, NM_UNMANAGED_USER_EXPLICIT, FALSE, NM_DEVICE_STATE_REASON_USER_REQUESTED);
 
 	g_return_val_if_fail (nm_device_get_managed (device, FALSE), FALSE);
 

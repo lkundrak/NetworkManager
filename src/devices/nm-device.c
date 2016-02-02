@@ -1733,11 +1733,11 @@ nm_device_create_and_realize (NMDevice *self,
 	realize_start_setup (self, plink);
 	nm_device_realize_finish (self, plink);
 
-	nm_device_state_changed (self,
-	                         NM_DEVICE_STATE_UNAVAILABLE,
-	                         NM_DEVICE_STATE_REASON_NOW_MANAGED);
-
-	g_return_val_if_fail (nm_device_check_connection_compatible (self, connection), TRUE);
+	if (nm_device_get_managed (self, FALSE)) {
+		nm_device_state_changed (self,
+		                         NM_DEVICE_STATE_UNAVAILABLE,
+		                         NM_DEVICE_STATE_REASON_NOW_MANAGED);
+	}
 	return TRUE;
 }
 
