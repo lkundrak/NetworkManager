@@ -9346,9 +9346,12 @@ _nm_device_check_connection_available (NMDevice *self,
 {
 	NMDeviceState state;
 
-	/* an unrealized device is always available. */
-	if (!nm_device_is_real (self))
-		return nm_device_check_connection_compatible (self, connection);
+	/* an unrealized software device is always available, hardware devices never. */
+	if (!nm_device_is_real (self)) {
+		if (nm_device_is_software (self))
+			return nm_device_check_connection_compatible (self, connection);
+		return FALSE;
+	}
 
 	state = nm_device_get_state (self);
 	if (state < NM_DEVICE_STATE_UNMANAGED)
