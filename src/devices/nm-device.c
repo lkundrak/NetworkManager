@@ -10186,10 +10186,12 @@ _set_state_full (NMDevice *self,
 	old_state = priv->state;
 
 	/* Do nothing if state isn't changing, but as a special case allow
-	 * re-setting UNAVAILABLE.
+	 * re-setting UNAVAILABLE if the device is missing firmware so that we
+	 * can retry device initialization.
 	 */
 	if (   (priv->state == state)
-	    && state != NM_DEVICE_STATE_UNAVAILABLE) {
+	    && (   state != NM_DEVICE_STATE_UNAVAILABLE
+	        || !priv->firmware_missing)) {
 		_LOGD (LOGD_DEVICE, "device state change: %s -> %s (reason '%s') [%d %d %d]%s",
 		       state_to_string (old_state),
 		       state_to_string (state),
