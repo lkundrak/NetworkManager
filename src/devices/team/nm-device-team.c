@@ -94,11 +94,6 @@ check_connection_compatible (NMDevice *device, NMConnection *connection)
 	if (!s_team || !nm_connection_is_type (connection, NM_SETTING_TEAM_SETTING_NAME))
 		return FALSE;
 
-	/* Team connections must specify the virtual interface name */
-	iface = nm_connection_get_interface_name (connection);
-	if (!iface || strcmp (nm_device_get_iface (device), iface))
-		return FALSE;
-
 	/* FIXME: match team properties like mode, etc? */
 
 	return TRUE;
