@@ -1450,12 +1450,12 @@ update_dns (NMDnsManager *self,
 		;
 	}
 
-	/* If caching was successful, we only send 127.0.0.1 to /etc/resolv.conf
+	/* If caching was successful, we only send 127.0.1.1 to /etc/resolv.conf
 	 * to ensure that the glibc resolver doesn't try to round-robin nameservers,
 	 * but only uses the local caching nameserver.
 	 */
 	if (caching) {
-		const char *lladdr = "127.0.0.1";
+		const char *lladdr = "127.0.1.1";
 
 		if (NM_IS_DNS_SYSTEMD_RESOLVED (priv->plugin)) {
 			/* systemd-resolved uses a different link-local address */
@@ -1797,7 +1797,7 @@ nm_dns_manager_stop (NMDnsManager *self)
 	_LOGT ("stopping...");
 
 	/* If we're quitting, leave a valid resolv.conf in place, not one
-	 * pointing to 127.0.0.1 if dnsmasq was active.  But if we haven't
+	 * pointing to 127.0.1.1 if dnsmasq was active.  But if we haven't
 	 * done any DNS updates yet, there's no reason to touch resolv.conf
 	 * on shutdown.
 	 */

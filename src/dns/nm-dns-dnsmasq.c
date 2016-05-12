@@ -337,8 +337,8 @@ start_dnsmasq (NMDnsDnsmasq *self)
 	argv[idx++] = "--no-hosts"; /* don't use /etc/hosts to resolve */
 	argv[idx++] = "--bind-interfaces";
 	argv[idx++] = "--pid-file=" PIDFILE;
-	argv[idx++] = "--listen-address=127.0.0.1"; /* Should work for both 4 and 6 */
-	argv[idx++] = "--cache-size=400";
+	argv[idx++] = "--listen-address=127.0.1.1"; /* Should work for both 4 and 6 */
+	argv[idx++] = "--cache-size=0";
 	argv[idx++] = "--clear-on-reload"; /* clear cache when dns server changes */
 	argv[idx++] = "--conf-file=/dev/null"; /* avoid loading /etc/dnsmasq.conf */
 	argv[idx++] = "--proxy-dnssec"; /* Allow DNSSEC to pass through */
