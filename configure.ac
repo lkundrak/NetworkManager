@@ -236,6 +236,17 @@ fi
 AM_CONDITIONAL(WITH_IWD, test x"${ac_with_iwd}" = x"yes")
 
 dnl
+dnl Default to using WEXT but allow it to be disabled
+dnl
+AC_ARG_WITH(urfkill, AS_HELP_STRING([--with-urfkill=yes], [Enable or disable support for urfkill]), ac_with_urfkill=$withval, ac_with_urfkill="yes")
+if test x"$ac_with_urfkill" = x"yes"; then
+	AC_DEFINE(WITH_URFKILL, 1, [Define if you want to build with support for the urfkill daemon])
+else
+	AC_DEFINE(WITH_URFKILL, 0, [Define if you want to build with support for the urfkill daemon])
+fi
+AM_CONDITIONAL(WITH_URFKILL, test x"${ac_with_urfkill}" = x"yes")
+
+dnl
 dnl Checks for libdl - on certain platforms its part of libc
 dnl
 AC_SEARCH_LIBS([dlopen], [dl dld], [], [ac_cv_search_dlopen=])

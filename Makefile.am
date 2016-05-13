@@ -1810,6 +1810,13 @@ src_libNetworkManager_la_SOURCES = \
 	\
 	$(NULL)
 
+if WITH_URFKILL
+src_libNetworkManager_la_SOURCES += \
+	src/nm-urfkill-manager.c \
+	src/nm-urfkill-manager.h \
+	$(NULL)
+endif
+
 src_libNetworkManager_la_LIBADD = \
 	src/libNetworkManagerBase.la \
 	src/libsystemd-nm.la \

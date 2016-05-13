@@ -40,6 +40,7 @@
 #include "platform/nmp-object.h"
 #include "nm-hostname-manager.h"
 #include "nm-rfkill-manager.h"
+#include "nm-urfkill-manager.h"
 #include "dhcp/nm-dhcp-manager.h"
 #include "settings/nm-settings.h"
 #include "settings/nm-settings-connection.h"
@@ -171,6 +172,9 @@ typedef struct {
 		guint            id;
 	} prop_filter;
 	NMRfkillManager *rfkill_mgr;
+#if WITH_URFKILL
+	NMUrfkillManager *urfkill_mgr;
+#endif
 
 	CList link_cb_lst;
 
@@ -199,6 +203,7 @@ typedef struct {
 	gboolean ifstate_force_online;
 
 	guint timestamp_update_id;
+	guint rfkill_initial_id;
 
 	guint devices_inited_id;
 
@@ -7169,6 +7174,47 @@ nm_manager_set_capability (NMManager *self,
 
 /*****************************************************************************/
 
+#if WITH_URFKILL
+static void
+urfkill_wlan_state_changed_cb (NMUrfkillManager *mgr,
+			       gboolean enabled,
+			       gpointer user_data)
+{
+	NMManager *self = NM_MANAGER (user_data);
+	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
+
+	nm_log_dbg (LOGD_RFKILL, "urfkill wlan state changed to %s",
+		    enabled ? "enabled" : "disabled");
+
+	if (priv->rfkill_initial_id) {
+		g_source_remove (priv->rfkill_initial_id);
+		priv->rfkill_initial_id = 0;
+	}
+
+	manager_update_radio_enabled (self,
+				      &priv->radio_states[RFKILL_TYPE_WLAN],
+				      enabled);
+	nm_manager_update_state (self);
+}
+
+static void
+urfkill_wwan_state_changed_cb (NMUrfkillManager *mgr,
+			       gboolean enabled,
+			       gpointer user_data)
+{
+	NMManager *self = NM_MANAGER (user_data);
+	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
+
+	nm_log_dbg (LOGD_RFKILL, "urfkill wwan state changed to %s",
+		    enabled ? "enabled" : "disabled" );
+
+	manager_update_radio_enabled (self,
+				      &priv->radio_states[RFKILL_TYPE_WWAN],
+				      enabled);
+	nm_manager_update_state (self);
+}
+#endif /* WITH_URFKILL */
+
 NM_DEFINE_SINGLETON_REGISTER (NMManager);
 
 NMManager *
@@ -7185,6 +7231,44 @@ nm_settings_get (void)
 
 	return NM_MANAGER_GET_PRIVATE (singleton_instance)->settings;
 }
+
+typedef struct KillState KillState;
+struct KillState {
+	NMManager *manager;
+	gboolean wlan_enabled;
+	gboolean wwan_enabled;
+};
+
+static gboolean
+rfkill_change_timeout (gpointer user_data)
+{
+	KillState *state = (KillState *) user_data;
+	NMManager *self = state->manager;
+	NMManagerPrivate *priv;
+
+	g_return_val_if_fail (NM_IS_MANAGER (self), G_SOURCE_REMOVE);
+
+	priv = NM_MANAGER_GET_PRIVATE (self);
+
+	rfkill_change (self, priv->radio_states[RFKILL_TYPE_WLAN].desc, RFKILL_TYPE_WLAN, state->wlan_enabled);
+	rfkill_change (self, priv->radio_states[RFKILL_TYPE_WWAN].desc, RFKILL_TYPE_WWAN, state->wwan_enabled);
+
+       return G_SOURCE_REMOVE;
+}
+
+static void
+kill_state_free (gpointer user_data)
+{
+	KillState *state = (KillState *) user_data;
+
+	if (state->manager) {
+		g_object_unref (state->manager);
+		state->manager = NULL;
+	}
+
+	g_slice_free (KillState, (KillState *)user_data);
+}
+
 
 NMManager *
 nm_manager_setup (void)
@@ -7210,6 +7294,7 @@ constructed (GObject *object)
 	NMManager *self = NM_MANAGER (object);
 	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
 	const NMConfigState *state;
+	KillState *kill_state;
 
 	G_OBJECT_CLASS (nm_manager_parent_class)->constructed (object);
 
@@ -7265,15 +7350,37 @@ constructed (GObject *object)
 	                  NM_RFKILL_MANAGER_SIGNAL_RFKILL_CHANGED,
 	                  G_CALLBACK (rfkill_manager_rfkill_changed_cb),
 	                  self);
+#if WITH_URFKILL
+	priv->urfkill_mgr = nm_urfkill_manager_new ();
+
+	g_signal_connect (priv->urfkill_mgr,
+			  "wlan-state-changed",
+			  G_CALLBACK (urfkill_wlan_state_changed_cb),
+			  self);
+	g_signal_connect (priv->urfkill_mgr,
+			  "wwan-state-changed",
+			  G_CALLBACK (urfkill_wwan_state_changed_cb),
+			  self);
+	urfkill_wlan_state_changed_cb (priv->urfkill_mgr, TRUE, self);
+	urfkill_wwan_state_changed_cb (priv->urfkill_mgr, TRUE, self);
+#endif
 
 	/* Force kernel WiFi/WWAN rfkill state to follow NM saved WiFi/WWAN state
 	 * in case the BIOS doesn't save rfkill state, and to be consistent with user
 	 * changes to the WirelessEnabled/WWANEnabled properties which toggle kernel
 	 * rfkill.
 	 */
-	rfkill_change (self, priv->radio_states[RFKILL_TYPE_WLAN].desc, RFKILL_TYPE_WLAN, priv->radio_states[RFKILL_TYPE_WLAN].user_enabled);
-	rfkill_change (self, priv->radio_states[RFKILL_TYPE_WWAN].desc, RFKILL_TYPE_WWAN, priv->radio_states[RFKILL_TYPE_WWAN].user_enabled);
+	kill_state = g_slice_new0 (KillState);
+	kill_state->manager = g_object_ref (self);
+	kill_state->wlan_enabled = priv->radio_states[RFKILL_TYPE_WLAN].user_enabled;
+	kill_state->wwan_enabled = priv->radio_states[RFKILL_TYPE_WWAN].user_enabled;
+
+	priv->rfkill_initial_id = g_timeout_add_seconds_full (G_PRIORITY_DEFAULT, 10,
+							      rfkill_change_timeout,
+							      kill_state,
+							      kill_state_free);
 }
+
 
 static void
 nm_manager_init (NMManager *self)
