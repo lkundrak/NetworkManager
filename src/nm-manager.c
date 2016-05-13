@@ -3162,6 +3162,14 @@ add:
 		gboolean ignore = FALSE;
 		gs_free_error GError *error = NULL;
 
+		/* Ignore rild modem devices, which will be handled by their modem parent */
+		if (g_strstr_len (plink->name, NM_STRLEN ("rmnet"), "rmnet") ||
+			g_strstr_len (plink->name, NM_STRLEN ("rev_rmnet"), "rev_rmnet") ||
+			g_strstr_len (plink->name, NM_STRLEN ("ccmni"), "ccmni")) {
+			_LOGW (LOGD_PLATFORM, "Ignoring rild modem device: %s", plink->name);
+			return;
+		}
+
 		device = nm_device_factory_create_device (factory, plink->name, plink, NULL, &ignore, &error);
 		if (!device) {
 			if (!ignore) {
