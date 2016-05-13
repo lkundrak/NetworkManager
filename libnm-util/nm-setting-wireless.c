@@ -182,11 +182,13 @@ nm_setting_wireless_ap_security_compatible (NMSettingWireless *s_wireless,
 	}
 
 	/* Adhoc WPA */
-	if (!strcmp (key_mgmt, "wpa-none")) {
-		if (ap_mode != NM_802_11_MODE_ADHOC)
-			return FALSE;
-		/* FIXME: validate ciphers if they're in the beacon */
-		return TRUE;
+	if (ap_mode == NM_802_11_MODE_ADHOC) {
+		if (!strcmp (key_mgmt, "wpa-psk")) {
+			// FIXME: validate ciphers if the BSSID actually puts WPA/RSN IE in
+			// it's beacon
+			return TRUE;
+		}
+		return FALSE;
 	}
 
 	/* Adhoc WPA2 (ie, RSN IBSS) */

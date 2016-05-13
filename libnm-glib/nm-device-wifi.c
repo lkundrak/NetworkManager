@@ -497,8 +497,7 @@ connection_compatible (NMDevice *device, NMConnection *connection, GError **erro
 	if (s_wsec) {
 		/* Connection has security, verify it against the device's capabilities */
 		key_mgmt = nm_setting_wireless_security_get_key_mgmt (s_wsec);
-		if (   !g_strcmp0 (key_mgmt, "wpa-none")
-		    || !g_strcmp0 (key_mgmt, "wpa-psk")
+		if (   !g_strcmp0 (key_mgmt, "wpa-psk")
 		    || !g_strcmp0 (key_mgmt, "wpa-eap")) {
 
 			/* Is device only WEP capable? */

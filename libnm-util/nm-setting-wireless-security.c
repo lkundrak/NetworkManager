@@ -837,8 +837,7 @@ need_secrets (NMSetting *setting)
 	}
 
 	/* WPA-PSK infrastructure and adhoc */
-	if (   (strcmp (priv->key_mgmt, "wpa-none") == 0)
-	    || (strcmp (priv->key_mgmt, "wpa-psk") == 0)) {
+	if (strcmp (priv->key_mgmt, "wpa-psk") == 0) {
 		if (!nm_utils_wpa_psk_valid (priv->psk)) {
 			g_ptr_array_add (secrets, NM_SETTING_WIRELESS_SECURITY_PSK);
 			return secrets;
@@ -877,7 +876,7 @@ verify (NMSetting *setting, GSList *all_settings, GError **error)
 {
 	NMSettingWirelessSecurity *self = NM_SETTING_WIRELESS_SECURITY (setting);
 	NMSettingWirelessSecurityPrivate *priv = NM_SETTING_WIRELESS_SECURITY_GET_PRIVATE (self);
-	const char *valid_key_mgmt[] = { "none", "ieee8021x", "wpa-none", "wpa-psk", "wpa-eap", NULL };
+	const char *valid_key_mgmt[] = { "none", "ieee8021x", "wpa-psk", "wpa-eap", NULL };
 	const char *valid_auth_algs[] = { "open", "shared", "leap", NULL };
 	const char *valid_protos[] = { "wpa", "rsn", NULL };
 	const char *valid_pairwise[] = { "tkip", "ccmp", NULL };
@@ -983,41 +982,13 @@ verify (NMSetting *setting, GSList *all_settings, GError **error)
 		return FALSE;
 	}
 
-	if (priv->pairwise) {
-		const char *wpa_none[] = { "wpa-none", NULL };
-
-		/* For ad-hoc connections, pairwise must be "none" */
-		if (g_strv_contains (wpa_none, priv->key_mgmt)) {
-			GSList *iter;
-			gboolean found = FALSE;
-
-			for (iter = priv->pairwise; iter; iter = g_slist_next (iter)) {
-				if (!strcmp ((char *) iter->data, "none")) {
-					found = TRUE;
-					break;
-				}
-			}
-
-			/* pairwise cipher list didn't contain "none", which is invalid
-			 * for WPA adhoc connections.
-			 */
-			if (!found) {
-				g_set_error (error,
-				             NM_SETTING_WIRELESS_SECURITY_ERROR,
-				             NM_SETTING_WIRELESS_SECURITY_ERROR_INVALID_PROPERTY,
-				             _("'%s' connections require '%s' in this property"),
-				             NM_SETTING_WIRELESS_MODE_ADHOC, "none");
-				g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME, NM_SETTING_WIRELESS_SECURITY_PAIRWISE);
-				return FALSE;
-			}
-		} else if (!_nm_utils_string_slist_validate (priv->pairwise, valid_pairwise)) {
-			g_set_error_literal (error,
-			                     NM_SETTING_WIRELESS_SECURITY_ERROR,
-			                     NM_SETTING_WIRELESS_SECURITY_ERROR_INVALID_PROPERTY,
-			                     _("property is invalid"));
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME, NM_SETTING_WIRELESS_SECURITY_PAIRWISE);
-			return FALSE;
-		}
+	if (priv->pairwise && !_nm_utils_string_slist_validate (priv->pairwise, valid_pairwise)) {
+		g_set_error (error,
+		             NM_SETTING_WIRELESS_SECURITY_ERROR,
+		             NM_SETTING_WIRELESS_SECURITY_ERROR_INVALID_PROPERTY,
+		             NM_SETTING_WIRELESS_SECURITY_PAIRWISE);
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SECURITY_SETTING_NAME, NM_SETTING_WIRELESS_SECURITY_PAIRWISE);
+		return FALSE;
 	}
 
 	if (priv->group && !_nm_utils_string_slist_validate (priv->group, valid_groups)) {
@@ -1295,7 +1266,7 @@ nm_setting_wireless_security_class_init (NMSettingWirelessSecurityClass *setting
 	 * NMSettingWirelessSecurity:key-mgmt:
 	 *
 	 * Key management used for the connection.  One of "none" (WEP), "ieee8021x"
-	 * (Dynamic WEP), "wpa-none" (Ad-Hoc WPA-PSK), "wpa-psk" (infrastructure
+	 * (Dynamic WEP), "wpa-psk" (infrastructure or Ad-Hoc
 	 * WPA-PSK), or "wpa-eap" (WPA-Enterprise).  This property must be set for
 	 * any Wi-Fi connection that uses security.
 	 **/

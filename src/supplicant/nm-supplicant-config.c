@@ -843,8 +843,7 @@ nm_supplicant_config_add_setting_wireless_security (NMSupplicantConfig *self,
 	}
 
 	/* Only WPA-specific things when using WPA */
-	if (   !strcmp (key_mgmt, "wpa-none")
-	    || !strcmp (key_mgmt, "wpa-psk")
+	if (   !strcmp (key_mgmt, "wpa-psk")
 	    || !strcmp (key_mgmt, "wpa-eap")) {
 		if (!ADD_STRING_LIST_VAL (self, setting, wireless_security, proto, protos, "proto", ' ', TRUE, NULL, error))
 			return FALSE;

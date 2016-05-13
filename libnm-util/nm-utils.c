@@ -723,26 +723,17 @@ nm_utils_security_valid (NMUtilsSecurityType type,
 	case NMU_SEC_WPA_PSK:
 		if (!(wifi_caps & NM_WIFI_DEVICE_CAP_WPA))
 			return FALSE;
+		if (adhoc)
+			return FALSE;
 		if (have_ap) {
-			/* Ad-Hoc WPA APs won't necessarily have the PSK flag set, and
-			 * they don't have any pairwise ciphers. */
-			if (adhoc) {
+			if (ap_wpa & NM_802_11_AP_SEC_KEY_MGMT_PSK) {
 				/* coverity[dead_error_line] */
-				if (   (ap_wpa & NM_802_11_AP_SEC_GROUP_TKIP)
+				if (   (ap_wpa & NM_802_11_AP_SEC_PAIR_TKIP)
 				    && (wifi_caps & NM_WIFI_DEVICE_CAP_CIPHER_TKIP))
 					return TRUE;
-				if (   (ap_wpa & NM_802_11_AP_SEC_GROUP_CCMP)
+				if (   (ap_wpa & NM_802_11_AP_SEC_PAIR_CCMP)
 				    && (wifi_caps & NM_WIFI_DEVICE_CAP_CIPHER_CCMP))
 					return TRUE;
-			} else {
-				if (ap_wpa & NM_802_11_AP_SEC_KEY_MGMT_PSK) {
-					if (   (ap_wpa & NM_802_11_AP_SEC_PAIR_TKIP)
-					    && (wifi_caps & NM_WIFI_DEVICE_CAP_CIPHER_TKIP))
-						return TRUE;
-					if (   (ap_wpa & NM_802_11_AP_SEC_PAIR_CCMP)
-					    && (wifi_caps & NM_WIFI_DEVICE_CAP_CIPHER_CCMP))
-						return TRUE;
-				}
 			}
 			return FALSE;
 		}
@@ -751,13 +742,13 @@ nm_utils_security_valid (NMUtilsSecurityType type,
 		if (!(wifi_caps & NM_WIFI_DEVICE_CAP_RSN))
 			return FALSE;
 		if (have_ap) {
-			/* Ad-Hoc WPA APs won't necessarily have the PSK flag set, and
-			 * they don't have any pairwise ciphers, nor any RSA flags yet. */
 			if (adhoc) {
 				/* coverity[dead_error_line] */
-				if (wifi_caps & NM_WIFI_DEVICE_CAP_CIPHER_TKIP)
-					return TRUE;
-				if (wifi_caps & NM_WIFI_DEVICE_CAP_CIPHER_CCMP)
+				if (!(wifi_caps & NM_WIFI_DEVICE_CAP_IBSS_RSN))
+					return FALSE;
+				/* Ad-Hoc RSN peers may support TKIP, but we don't. */
+				if (   (ap_rsn & NM_802_11_AP_SEC_PAIR_CCMP)
+				    && (wifi_caps & NM_WIFI_DEVICE_CAP_CIPHER_CCMP))
 					return TRUE;
 			} else {
 				if (ap_rsn & NM_802_11_AP_SEC_KEY_MGMT_PSK) {
