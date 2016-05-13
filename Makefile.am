@@ -2851,6 +2851,51 @@ EXTRA_DIST += \
 	src/settings/plugins/ifupdown/tests/meson.build
 
 ###############################################################################
+# src/settings/plugins/ifupdown
+###############################################################################
+
+if CONFIG_PLUGIN_OFONO
+
+core_plugins += src/settings/plugins/ofono/libnm-settings-plugin-ofono.la
+
+noinst_LTLIBRARIES += src/settings/plugins/ofono/libnms-ofono-io.la
+
+src_settings_plugins_ofono_libnms_ofono_io_la_SOURCES = \
+	src/settings/plugins/ofono/parser.c \
+	src/settings/plugins/ofono/parser.h
+
+src_settings_plugins_ofono_libnms_ofono_io_la_CPPFLAGS = $(src_cppflags_base)
+
+src_settings_plugins_ofono_libnms_ofono_io_la_LIBADD = \
+	$(LIBUDEV_LIBS)
+
+src_settings_plugins_ofono_libnm_settings_plugin_ofono_la_SOURCES = \
+	src/settings/plugins/ofono/nm-ofono-connection.c \
+	src/settings/plugins/ofono/nm-ofono-connection.h \
+	src/settings/plugins/ofono/plugin.c \
+	src/settings/plugins/ofono/plugin.h
+
+src_settings_plugins_ofono_libnm_settings_plugin_ofono_la_CPPFLAGS = $(src_cppflags_base)
+
+src_settings_plugins_ofono_libnm_settings_plugin_ofono_la_LDFLAGS = \
+	-module -avoid-version \
+	-Wl,--version-script="$(srcdir)/linker-script-settings.ver"
+
+src_settings_plugins_ofono_libnm_settings_plugin_ofono_la_LIBADD = \
+	src/settings/plugins/ofono/libnms-ofono-io.la \
+	$(LIBUDEV_LIBS)
+
+$(src_settings_plugins_ofono_libnm_settings_plugin_ofono_la_OBJECTS): $(libnm_core_lib_h_pub_mkenums)
+$(src_settings_plugins_ofono_libnms_ofono_core_la_OBJECTS): $(libnm_core_lib_h_pub_mkenums)
+
+check-local-symbols-settings-ofono: src/settings/plugins/ofono/libnm-settings-plugin-ofono.la
+	$(call check_so_symbols,$(builddir)/src/settings/plugins/ofono/.libs/libnm-settings-plugin-ofono.so)
+
+check_local += check-local-symbols-settings-ofono
+
+endif
+
+###############################################################################
 # src/devices
 ###############################################################################
 

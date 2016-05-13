@@ -128,9 +128,12 @@ AC_CHECK_FUNCS([__secure_getenv secure_getenv])
 AC_ARG_ENABLE(config-plugin-ibft, AS_HELP_STRING([--enable-config-plugin-ibft], [enable ibft configuration plugin]))
 AC_ARG_ENABLE(ifcfg-rh, AS_HELP_STRING([--enable-ifcfg-rh], [enable ifcfg-rh configuration plugin (Fedora/RHEL)]))
 AC_ARG_ENABLE(ifupdown, AS_HELP_STRING([--enable-ifupdown], [enable ifupdown configuration plugin (Debian/Ubuntu)]))
+AC_ARG_ENABLE(ofono, AS_HELP_STRING([--enable-ofono], [enable ofono configuration plugin (Ubuntu)]))
 # Default alternative plugins by distribution
 AS_IF([test -z "$enable_ifcfg_rh" -a -d /etc/sysconfig/network-scripts], enable_ifcfg_rh=yes)
 AS_IF([test -z "$enable_ifupdown" -a -f /etc/debian_version],            enable_ifupdown=yes)
+# Ofono is always enabled.
+AS_IF([test -z "$enable_ofono"], enable_ofono=yes)
 # Otherwise plugins default to "no"
 AS_IF([test -z "$enable_ifcfg_rh"], enable_ifcfg_rh=no)
 AS_IF([test -z "$enable_ifupdown"], enable_ifupdown=no)
@@ -140,6 +143,7 @@ AS_IF([test -z "$enable_config_plugin_ibft"], enable_config_plugin_ibft="no")
 AM_CONDITIONAL(CONFIG_PLUGIN_IBFT, test "$enable_config_plugin_ibft" = "yes")
 AM_CONDITIONAL(CONFIG_PLUGIN_IFCFG_RH, test "$enable_ifcfg_rh" = "yes")
 AM_CONDITIONAL(CONFIG_PLUGIN_IFUPDOWN, test "$enable_ifupdown" = "yes")
+AM_CONDITIONAL(CONFIG_PLUGIN_OFONO, test "$enable_ofono" = "yes")
 
 AC_ARG_WITH(config-plugins-default,
             AS_HELP_STRING([--with-config-plugins-default=PLUGINS],
@@ -1322,6 +1326,7 @@ echo "Configuration plugins (main.plugins=${config_plugins_default})"
 echo "  ibft: ${enable_config_plugin_ibft}"
 echo "  ifcfg-rh: ${enable_ifcfg_rh}"
 echo "  ifupdown: ${enable_ifupdown}"
+echo "  ofono: ${enable_ofono}"
 echo
 
 echo "Handlers for /etc/resolv.conf:"
