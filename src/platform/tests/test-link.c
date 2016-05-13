@@ -479,11 +479,19 @@ test_bond (void)
 	test_software (NM_LINK_TYPE_BOND, "bond");
 }
 
+#ifdef WITH_TEAM
 static void
 test_team (void)
 {
 	test_software (NM_LINK_TYPE_TEAM, "team");
 }
+#else
+static void
+test_team (void)
+{
+	g_test_skip ("Skipping test for teaming: not enabled in build");
+}
+#endif
 
 static void
 test_vlan (void)

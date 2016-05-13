@@ -1321,6 +1321,10 @@ if REQUIRE_ROOT_TESTS
 src_cppflags_test += -DREQUIRE_ROOT_TESTS=1
 endif
 
+if WITH_TEAMDCTL
+src_cppflags_test += -DWITH_TEAM=1
+endif
+
 src_ldflags = $(CODE_COVERAGE_LDFLAGS)
 
 sbin_PROGRAMS += \
