@@ -3408,7 +3408,6 @@ src_tests_ldadd = \
 
 check_programs += \
 	src/tests/test-general \
-	src/tests/test-general-with-expect \
 	src/tests/test-ip4-config \
 	src/tests/test-ip6-config \
 	src/tests/test-dcb \
