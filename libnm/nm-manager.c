@@ -922,7 +922,7 @@ find_active_connection_by_path (NMManager *self, const char *ac_path)
 static void
 recheck_pending_activations (NMManager *self)
 {
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
+	NMManagerPrivate *priv;
 	CList *iter, *safe;
 	NMActiveConnection *candidate;
 	const GPtrArray *devices;
@@ -931,6 +931,10 @@ recheck_pending_activations (NMManager *self)
 	GError *error;
 
 	object_manager = _nm_object_get_dbus_object_manager (NM_OBJECT (self));
+
+	g_return_if_fail (NM_IS_MANAGER (self));
+
+	priv = NM_MANAGER_GET_PRIVATE (self);
 
 	/* For each pending activation, look for an active connection that has the
 	 * pending activation's object path, where the active connection and its
