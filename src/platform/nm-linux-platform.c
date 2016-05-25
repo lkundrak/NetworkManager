@@ -5219,6 +5219,11 @@ do_add_addrroute (NMPlatform *platform,
 			do_request_one_type (platform, NMP_OBJECT_GET_TYPE (obj_id));
 	}
 
+	if (seq_result == -EEXIST) {
+		_LOGI ("do_add_addroute: seq_restul == -EEXISTS; treating as OK");
+		seq_result = WAIT_FOR_NL_RESPONSE_RESULT_RESPONSE_OK;
+	}
+
 	return wait_for_nl_response_to_plerr (seq_result);
 }
 
