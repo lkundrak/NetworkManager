@@ -3170,6 +3170,16 @@ add:
 			return;
 		}
 
+		/*
+		 * Ubuntu: Explicitly unmanage all p2p Wi-Fi devices which are
+		 * managed externally in the case of Wi-Fi Direct.
+		 */
+		if ((plink->type == NM_LINK_TYPE_WIFI)
+			&& g_strstr_len (plink->name, NM_STRLEN ("p2p"), "p2p")) {
+			nm_log_info (LOGD_PLATFORM, "(%s): ignoring P2P wireless iface", plink->name);
+			return;
+		}
+
 		device = nm_device_factory_create_device (factory, plink->name, plink, NULL, &ignore, &error);
 		if (!device) {
 			if (!ignore) {
