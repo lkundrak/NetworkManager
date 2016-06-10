@@ -18,6 +18,7 @@
         the SecretsRequired signal) are not allowed.
     -->
     <method name="Connect">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_connect"/>
       <arg name="connection" type="a{sa{sv}}" direction="in"/>
     </method>
 
@@ -31,6 +32,7 @@
         indicates that it needs additional secrets during the connect process).
     -->
     <method name="ConnectInteractive">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_connect_interactive"/>
       <arg name="connection" type="a{sa{sv}}" direction="in"/>
       <arg name="details" type="a{sv}" direction="in"/>
     </method>
@@ -44,6 +46,7 @@
         connect successfully.
     -->
     <method name="NeedSecrets">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_need_secrets"/>
       <arg name="settings" type="a{sa{sv}}" direction="in"/>
       <arg name="setting_name" type="s" direction="out"/>
     </method>
@@ -53,7 +56,9 @@
 
         Disconnect the plugin.
     -->
-    <method name="Disconnect" />
+    <method name="Disconnect">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_disconnect"/>
+    </method>
 
     <!--
         SetConfig:
@@ -62,6 +67,7 @@
         Set generic connection details on the connection.
     -->
     <method name="SetConfig">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_set_config"/>
       <arg name="config" type="a{sv}" direction="in"/>
     </method>
 
@@ -72,6 +78,7 @@
         Set IPv4 details on the connection.
     -->
     <method name="SetIp4Config">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_set_ip4_config"/>
       <arg name="config" type="a{sv}" direction="in"/>
     </method>
 
@@ -82,6 +89,7 @@
         Set IPv6 details on the connection.
     -->
     <method name="SetIp6Config">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_set_ip6_config"/>
       <arg name="config" type="a{sv}" direction="in"/>
     </method>
 
@@ -92,6 +100,7 @@
         Indicate a failure to the plugin.
     -->
     <method name="SetFailure">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_set_failure"/>
       <arg name="reason" type="s" direction="in"/>
     </method>
 
@@ -136,6 +145,7 @@
         or other information to the plugin.
     -->
     <method name="NewSecrets">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_vpn_plugin_new_secrets"/>
       <arg name="connection" type="a{sa{sv}}" direction="in"/>
     </method>
 

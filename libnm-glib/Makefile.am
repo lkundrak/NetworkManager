@@ -177,10 +177,10 @@ BUILT_SOURCES += $(GLIB_GENERATED)
 
 #####################################################
 
-nm-vpn-plugin-glue.h: $(top_srcdir)/introspection/nm-vpn-plugin.xml
+nm-vpn-plugin-glue.h: nm-vpn-plugin.xml
 	$(AM_V_GEN) dbus-binding-tool --prefix=nm_vpn_plugin --mode=glib-server --output=$@ $<
 
-nm-secret-agent-glue.h: $(top_srcdir)/introspection/nm-secret-agent.xml
+nm-secret-agent-glue.h: nm-secret-agent.xml
 	$(AM_V_GEN) dbus-binding-tool --prefix=nm_secret_agent --mode=glib-server --output=$@ $<
 
 pkgconfigdir = $(libdir)/pkgconfig
@@ -188,7 +188,7 @@ pkgconfig_DATA = libnm-glib.pc libnm-glib-vpn.pc
 
 DISTCLEANFILES = libnm-glib.pc libnm-glib.pc
 
-EXTRA_DIST = libnm-glib.pc.in libnm-glib-vpn.pc.in libnm-glib.ver libnm-glib-vpn.ver
+EXTRA_DIST = libnm-glib.pc.in libnm-glib-vpn.pc.in libnm-glib.ver libnm-glib-vpn.ver nm-vpn-plugin.xml nm-secret-agent.xml
 
 CLEANFILES = $(BUILT_SOURCES)
 
