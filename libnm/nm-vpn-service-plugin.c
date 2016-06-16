@@ -27,6 +27,8 @@
 #include <signal.h>
 #include <stdlib.h>
 
+#include <gio/gunixfdlist.h>
+
 #include "nm-enum-types.h"
 #include "nm-utils.h"
 #include "nm-connection.h"
@@ -664,6 +666,88 @@ impl_vpn_service_plugin_new_secrets (NMVpnServicePlugin *plugin,
 	g_object_unref (connection);
 }
 
+static void
+impl_vpn_service_plugin_need_p11_socket (NMVpnServicePlugin *plugin,
+                                         GDBusMethodInvocation *context,
+                                         GVariant *properties,
+                                         gpointer user_data)
+{
+	NMConnection *connection;
+	const char *module = "";
+	GError *error = NULL;
+
+	connection = _nm_simple_connection_new_from_dbus (properties, NM_SETTING_PARSE_FLAGS_BEST_EFFORT, &error);
+	if (!connection) {
+		g_dbus_method_invocation_return_error (context,
+		                                       NM_VPN_PLUGIN_ERROR,
+		                                       NM_VPN_PLUGIN_ERROR_INVALID_CONNECTION,
+		                                       "The connection was invalid: %s",
+		                                       error->message);
+		g_error_free (error);
+		return;
+	}
+
+	if (NM_VPN_SERVICE_PLUGIN_GET_CLASS (plugin)->need_p11_socket) {
+		NM_VPN_SERVICE_PLUGIN_GET_CLASS (plugin)->need_p11_socket (plugin, connection, &module, &error);
+		if (error) {
+			g_dbus_method_invocation_take_error (context, error);
+			return;
+		}
+	}
+
+	g_dbus_method_invocation_return_value (context, g_variant_new ("(s)", module));
+}
+
+static void
+impl_vpn_service_plugin_p11_socket (NMVpnServicePlugin *plugin,
+                                    GDBusMethodInvocation *context,
+                                    GUnixFDList *fd_list,
+                                    GVariant *socket,
+                                    gpointer user_data)
+{
+	NMVpnServicePluginPrivate *priv = NM_VPN_SERVICE_PLUGIN_GET_PRIVATE (plugin);
+	GError *error = NULL;
+	int fd;
+
+	if (priv->state != NM_VPN_SERVICE_STATE_INIT) {
+		g_dbus_method_invocation_return_error (context,
+		                                       NM_VPN_PLUGIN_ERROR,
+		                                       NM_VPN_PLUGIN_ERROR_WRONG_STATE,
+		                                       "Could not accept p11 socket: wrong plugin state %d",
+		                                       priv->state);
+		goto fail;
+	}
+
+	if (!NM_VPN_SERVICE_PLUGIN_GET_CLASS (plugin)->p11_socket) {
+		g_dbus_method_invocation_return_error (context,
+		                                       NM_VPN_PLUGIN_ERROR,
+		                                       NM_VPN_PLUGIN_ERROR_INTERACTIVE_NOT_SUPPORTED,
+		                                       "Could not accept p11 socket: plugin cannot accept a p11 socket");
+		goto fail;
+	}
+
+	fd = g_unix_fd_list_get (fd_list, g_variant_get_handle (socket), &error);
+	if (fd == -1) {
+		g_dbus_method_invocation_take_error (context, error);
+		goto fail;
+	}
+
+	if (!NM_VPN_SERVICE_PLUGIN_GET_CLASS (plugin)->p11_socket (plugin, fd, &error)) {
+		g_dbus_method_invocation_take_error (context, error);
+		goto fail;
+	}
+
+	g_dbus_method_invocation_return_value (context, NULL);
+	return;
+
+fail:
+	/* Stop the plugin from an idle handler so that the P11Socket
+	 * method return gets sent before the STOP StateChanged signal.
+	 */
+	schedule_fail_stop (plugin, 0);
+}
+
+
 /**
  * nm_vpn_service_plugin_secrets_required:
  * @plugin: the #NMVpnServicePlugin
@@ -1006,12 +1090,14 @@ init_sync (GInitable *initable, GCancellable *cancellable, GError **error)
 	                       "Connect", impl_vpn_service_plugin_connect,
 	                       "ConnectInteractive", impl_vpn_service_plugin_connect_interactive,
 	                       "NeedSecrets", impl_vpn_service_plugin_need_secrets,
+	                       "NeedP11Socket", impl_vpn_service_plugin_need_p11_socket,
 	                       "NewSecrets", impl_vpn_service_plugin_new_secrets,
 	                       "Disconnect", impl_vpn_service_plugin_disconnect,
 	                       "SetConfig", impl_vpn_service_plugin_set_config,
 	                       "SetIp4Config", impl_vpn_service_plugin_set_ip4_config,
 	                       "SetIp6Config", impl_vpn_service_plugin_set_ip6_config,
 	                       "SetFailure", impl_vpn_service_plugin_set_failure,
+	                       "P11Socket", impl_vpn_service_plugin_p11_socket,
 	                       NULL);
 
 	nm_vpn_service_plugin_set_connection (plugin, connection);

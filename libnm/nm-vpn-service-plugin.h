@@ -95,6 +95,11 @@ typedef struct {
 	                          const char **setting_name,
 	                          GError **error);
 
+	gboolean (*need_p11_socket)  (NMVpnServicePlugin *plugin,
+	                              NMConnection *connection,
+	                              const char **module,
+	                              GError **error);
+
 	NM_AVAILABLE_IN_1_2
 	gboolean (*disconnect)   (NMVpnServicePlugin   *plugin,
 	                          GError       **err);
@@ -110,9 +115,13 @@ typedef struct {
 	                                 GVariant *details,
 	                                 GError **error);
 
+	gboolean (*p11_socket)  (NMVpnServicePlugin *plugin,
+	                         int fd,
+	                         GError **error);
+
 	/*< private >*/
 	NM_AVAILABLE_IN_1_2
-	gpointer padding[8];
+	gpointer padding[6];
 } NMVpnServicePluginClass NM_AVAILABLE_IN_1_2;
 
 NM_AVAILABLE_IN_1_2
