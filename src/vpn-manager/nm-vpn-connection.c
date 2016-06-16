@@ -29,7 +29,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <gio/gunixfdlist.h>
 
+#include "nm-agent-manager.h"
 #include "nm-vpn-connection.h"
 #include "nm-ip4-config.h"
 #include "nm-ip6-config.h"
@@ -49,6 +51,7 @@
 #include "nm-dns-manager.h"
 
 #include "nmdbus-vpn-connection.h"
+#include "nmdbus-vpn-plugin.h"
 
 G_DEFINE_TYPE (NMVpnConnection, nm_vpn_connection, NM_TYPE_ACTIVE_CONNECTION)
 
@@ -83,6 +86,9 @@ typedef enum {
 typedef struct {
 	gboolean service_can_persist;
 	gboolean connection_can_persist;
+
+	gboolean need_secrets;
+	gboolean need_p11_socket;
 
 	NMSettingsConnectionCallId secrets_id;
 	SecretsReq secrets_idx;
@@ -333,7 +339,7 @@ call_plugin_disconnect (NMVpnConnection *self)
 {
 	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
 
-	nmdbus_vpn_plugin_call_disconnect (priv->proxy
+	nmdbus_vpn_plugin_call_disconnect (priv->proxy,
 	                                   priv->cancellable,
 	                                   (GAsyncReadyCallback) disconnect_cb,
 	                                   g_object_ref (self));
@@ -1735,7 +1741,7 @@ _hash_with_username (NMConnection *connection, const char *username)
 }
 
 static void
-really_activate (NMVpnConnection *self, const char *username)
+really_activate (NMVpnConnection *self)
 {
 	NMVpnConnectionPrivate *priv;
 	GVariantBuilder details;
@@ -1745,8 +1751,13 @@ really_activate (NMVpnConnection *self, const char *username)
 	priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
 	g_return_if_fail (priv->vpn_state == STATE_NEED_AUTH);
 
+	if (priv->need_secrets || priv->need_p11_socket) {
+		nm_assert (priv->need_secrets != priv->need_p11_socket);
+		return;
+	}
+
 	g_clear_pointer (&priv->connect_hash, g_variant_unref);
-	priv->connect_hash = _hash_with_username (_get_applied_connection (self), username);
+	priv->connect_hash = _hash_with_username (_get_applied_connection (self), priv->username);
 	g_variant_ref_sink (priv->connect_hash);
 
 	/* If at least one agent doesn't support VPN hints, then we can't use
@@ -1800,14 +1811,126 @@ state_changed_cb (GDBusProxy *proxy,
 }
 
 static void
-secrets_required_cb (GDBusProxy  *proxy,
-                     const char  *message,
-                     const char **secrets,
-                     gpointer     user_data)
+secrets_required_cb (NMDBusVpnPlugin *proxy,
+                     const char      *message,
+                     const char     **secrets,
+                     gpointer         user_data)
 {
 	NMVpnConnection *self = NM_VPN_CONNECTION (user_data);
 
 	plugin_interactive_secrets_required (self, message, secrets);
+}
+
+static void
+plugin_p11_socket_cb (GObject *proxy, GAsyncResult *result, gpointer user_data)
+{
+	NMVpnConnection *self = NM_VPN_CONNECTION (user_data);
+	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
+	GError *error = NULL;
+
+	if (!nmdbus_vpn_plugin_call_p11_socket_finish (NMDBUS_VPN_PLUGIN (proxy),
+	                                                   NULL, result, &error)) {
+		if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+			return;
+
+		g_dbus_error_strip_remote_error (error);
+		_LOGE ("sending p11 socket to the plugin failed: %s",
+		       error->message);
+		g_clear_error (&error);
+		_set_vpn_state (self, STATE_FAILED, NM_VPN_CONNECTION_STATE_REASON_NONE, FALSE);
+		return;
+	}
+
+	_LOGI ("VPN plugin: sent the p11 socket to the plugin; state %s (%d)",
+	       vpn_state_to_string (priv->vpn_state), priv->vpn_state);
+
+	priv->need_p11_socket = FALSE;
+	really_activate (self);
+}
+
+static void
+p11_socket_cb (NMAgentManager *manager,
+               const char *agent_dbus_owner,
+               const char *agent_uname,
+               int fd,
+               GError *error,
+               gpointer user_data)
+{
+	NMVpnConnection *self = NM_VPN_CONNECTION (user_data);
+	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
+        GUnixFDList *fd_list;
+
+	if (error) {
+		g_dbus_error_strip_remote_error (error);
+		_LOGE ("Failed to request a p11 remoting socket: %s", error->message);
+		_set_vpn_state (self, STATE_FAILED, NM_VPN_CONNECTION_STATE_REASON_NO_SECRETS, FALSE);
+		return;
+	}
+
+	_LOGI ("VPN plugin: got a p11 socket %d, forwarding it to the plugin; state %s (%d)", fd,
+	       vpn_state_to_string (priv->vpn_state), priv->vpn_state);
+
+        fd_list = g_unix_fd_list_new_from_array (&fd, 1);
+	nmdbus_vpn_plugin_call_p11_socket (priv->proxy,
+	                                   g_variant_new_handle (0),
+	                                   fd_list,
+	                                   priv->cancellable,
+	                                   plugin_p11_socket_cb,
+	                                   self);
+        g_object_unref (fd_list);
+}
+
+static void
+plugin_need_p11_socket_cb (GObject *proxy, GAsyncResult *result, gpointer user_data)
+{
+	NMVpnConnection *self = NM_VPN_CONNECTION (user_data);
+	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
+	GError *error = NULL;
+	gchar *module = NULL;
+
+	_LOGI ("VPN plugin: indicated need for p11 socket; state %s (%d)",
+	       vpn_state_to_string (priv->vpn_state), priv->vpn_state);
+
+	g_return_if_fail (priv->vpn_state == STATE_CONNECT ||
+	                  priv->vpn_state == STATE_NEED_AUTH);
+
+	if (!nmdbus_vpn_plugin_call_need_p11_socket_finish (NMDBUS_VPN_PLUGIN (proxy),
+	                                                    &module, result, &error)) {
+		if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+			return;
+
+		g_dbus_error_strip_remote_error (error);
+		_LOGE ("failed to query whether plugin needs a p11 socket: %s", error->message);
+		g_clear_error (&error);
+		_set_vpn_state (self, STATE_FAILED, NM_VPN_CONNECTION_STATE_REASON_NONE, FALSE);
+		return;
+	}
+
+	if (!strlen (module)) {
+		priv->need_p11_socket = FALSE;
+		really_activate (self);
+		return;
+	}
+
+	nm_agent_manager_get_p11_socket (nm_agent_manager_get (),
+                                         nm_active_connection_get_subject (NM_ACTIVE_CONNECTION (self)),
+	                                 module,
+	                                 p11_socket_cb,
+	                                 self);
+}
+
+
+static void
+get_p11_socket (NMVpnConnection *self)
+{
+	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
+
+	nmdbus_vpn_plugin_call_need_p11_socket (priv->proxy,
+	                                        nm_connection_to_dbus (_get_applied_connection (self),
+	                                                               NM_CONNECTION_SERIALIZE_ALL),
+	                                        priv->cancellable,
+	                                        plugin_need_p11_socket_cb,
+	                                        self);
 }
 
 static void
@@ -1860,6 +1983,10 @@ _name_owner_changed (GObject *object,
 
 	owner = g_dbus_proxy_get_name_owner (G_DBUS_PROXY (object));
 
+	/* TRUE until we're sure we don't need them before connecting. */
+	priv->need_secrets = TRUE;
+	priv->need_p11_socket = TRUE;
+
 	if (owner && !priv->service_running) {
 		/* service appeared */
 		priv->service_running = TRUE;
@@ -1890,6 +2017,7 @@ _name_owner_changed (GObject *object,
 		 * and last we ask the user for new secrets if required.
 		 */
 		get_secrets (self, SECRETS_REQ_SYSTEM, NULL);
+		get_p11_socket (self);
 	} else if (!owner && priv->service_running) {
 		/* service went away */
 		priv->service_running = FALSE;
@@ -2276,7 +2404,8 @@ plugin_need_secrets_cb (GDBusProxy *proxy, GAsyncResult *result, gpointer user_d
 		_LOGD ("service indicated no additional secrets required");
 
 		/* No secrets required; we can start the VPN */
-		really_activate (self, priv->username);
+		priv->need_secrets = FALSE;
+		really_activate (self);
 		return;
 	}
 

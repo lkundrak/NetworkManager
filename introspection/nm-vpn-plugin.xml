@@ -48,6 +48,11 @@
       <arg name="setting_name" type="s" direction="out"/>
     </method>
 
+    <method name="NeedP11Socket">
+      <arg name="settings" type="a{sa{sv}}" direction="in"/>
+      <arg name="module" type="s" direction="out"/>
+    </method>
+
     <!--
         Disconnect:
 
@@ -137,6 +142,11 @@
     -->
     <method name="NewSecrets">
       <arg name="connection" type="a{sa{sv}}" direction="in"/>
+    </method>
+
+    <method name="P11Socket">
+      <annotation name="org.gtk.GDBus.C.UnixFD" value="1"/>
+      <arg name="socket" type="h" direction="in"/>
     </method>
 
     <!--
