@@ -624,6 +624,10 @@ typedef enum { /*< flags >*/
  * @NM_SECRET_AGENT_CAPABILITY_NONE: the agent supports no special capabilities
  * @NM_SECRET_AGENT_CAPABILITY_VPN_HINTS: the agent supports passing hints to
  * VPN plugin authentication dialogs.
+ * @NM_SECRET_AGENT_CAPABILITY_P11_SOCKET: the agent will swawn a p11-kit remote
+ * upon request and pass around a fd of a socket connected to its input and output
+ * to the manager. The long-running agents may want to enable this while the ones
+ * that * terminate when a connection goes up should not.
  * @NM_SECRET_AGENT_CAPABILITY_LAST: bounds checking value; should not be used.
  *
  * #NMSecretAgentCapabilities indicate various capabilities of the agent.
@@ -631,9 +635,10 @@ typedef enum { /*< flags >*/
 typedef enum /*< flags >*/ {
 	NM_SECRET_AGENT_CAPABILITY_NONE = 0x0,
 	NM_SECRET_AGENT_CAPABILITY_VPN_HINTS = 0x1,
+	NM_SECRET_AGENT_CAPABILITY_P11_SOCKET = 0x2,
 
 	/* boundary value */
-	NM_SECRET_AGENT_CAPABILITY_LAST = NM_SECRET_AGENT_CAPABILITY_VPN_HINTS
+	NM_SECRET_AGENT_CAPABILITY_LAST = NM_SECRET_AGENT_CAPABILITY_P11_SOCKET
 } NMSecretAgentCapabilities;
 
 #ifndef NM_VERSION_H

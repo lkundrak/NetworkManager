@@ -139,7 +139,8 @@ static NMCResultCode
 do_agent_secret (NmCli *nmc, int argc, char **argv)
 {
 	/* Create secret agent */
-	nmc->secret_agent = nm_secret_agent_simple_new ("nmcli-agent");
+	nmc->secret_agent = nm_secret_agent_simple_new ("nmcli-agent",   NM_SECRET_AGENT_CAPABILITY_VPN_HINTS
+	                                                               | NM_SECRET_AGENT_CAPABILITY_P11_SOCKET);
 	if (nmc->secret_agent) {
 		/* We keep running */
 		nmc->should_wait++;

@@ -821,6 +821,7 @@ nm_secret_agent_simple_class_init (NMSecretAgentSimpleClass *klass)
 /**
  * nm_secret_agent_simple_new:
  * @name: the identifier of secret agent
+ * @flags: the desired #NMSecretAgentCapabilities
  *
  * Creates a new #NMSecretAgentSimple. It does not serve any requests until
  * nm_secret_agent_simple_enable() is called.
@@ -829,10 +830,10 @@ nm_secret_agent_simple_class_init (NMSecretAgentSimpleClass *klass)
  * or %NULL in case of a failure.
  */
 NMSecretAgentOld *
-nm_secret_agent_simple_new (const char *name)
+nm_secret_agent_simple_new (const char *name, NMSecretAgentCapabilities capabilities)
 {
 	return g_initable_new (NM_TYPE_SECRET_AGENT_SIMPLE, NULL, NULL,
 	                       NM_SECRET_AGENT_OLD_IDENTIFIER, name,
-	                       NM_SECRET_AGENT_OLD_CAPABILITIES, NM_SECRET_AGENT_CAPABILITY_VPN_HINTS,
+	                       NM_SECRET_AGENT_OLD_CAPABILITIES, capabilities,
 	                       NULL);
 }

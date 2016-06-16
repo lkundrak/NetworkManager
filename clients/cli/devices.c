@@ -1797,7 +1797,7 @@ do_device_connect (NmCli *nmc, int argc, char **argv)
 	nmc->should_wait++;
 
 	/* Create secret agent */
-	nmc->secret_agent = nm_secret_agent_simple_new ("nmcli-connect");
+	nmc->secret_agent = nm_secret_agent_simple_new ("nmcli-connect", NM_SECRET_AGENT_CAPABILITY_VPN_HINTS);
 	if (nmc->secret_agent)
 		g_signal_connect (nmc->secret_agent, "request-secrets", G_CALLBACK (nmc_secrets_requested), nmc);
 

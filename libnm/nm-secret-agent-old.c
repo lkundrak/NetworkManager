@@ -21,6 +21,8 @@
 #include "nm-default.h"
 
 #include <string.h>
+#include <errno.h>
+#include <gio/gunixfdlist.h>
 
 #include "nm-dbus-interface.h"
 #include "nm-secret-agent-old.h"
@@ -31,6 +33,7 @@
 
 #include "nmdbus-secret-agent.h"
 #include "nmdbus-agent-manager.h"
+
 
 static void nm_secret_agent_old_initable_iface_init (GInitableIface *iface);
 static void nm_secret_agent_old_async_initable_iface_init (GAsyncInitableIface *iface);
@@ -298,16 +301,107 @@ get_secrets_cb (NMSecretAgentOld *self,
 {
 	GetSecretsInfo *info = user_data;
 
-	if (error)
+	if (error) {
 		g_dbus_method_invocation_return_gerror (info->context, error);
-	else {
-		g_variant_take_ref (secrets);
-		g_dbus_method_invocation_return_value (info->context,
-		                                       g_variant_new ("(@a{sa{sv}})", secrets));
+		return;
 	}
+
+	g_variant_take_ref (secrets);
+	g_dbus_method_invocation_return_value (info->context,
+	                                       g_variant_new ("(@a{sa{sv}})", secrets));
 
 	/* Remove the request from internal tracking */
 	get_secrets_info_finalize (self, info);
+}
+
+static int
+p11_remote_fd (const char *module, pid_t *child, GError **error)
+{
+	int fds[2];
+
+	if (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) == -1) {
+		g_set_error (error,
+		             NM_SECRET_AGENT_ERROR,
+		             NM_SECRET_AGENT_ERROR_FAILED,
+		             "Could not create a socket pair: %s", strerror (errno));
+		return -1;
+	}
+
+	*child = fork ();
+	if (*child == -1) {
+		g_set_error (error,
+		             NM_SECRET_AGENT_ERROR,
+		             NM_SECRET_AGENT_ERROR_FAILED,
+		             "Fork failed: %s", strerror (errno));
+		return -1;
+	}
+
+	if (*child == 0) {
+		close (0);
+		close (1);
+		if (dup (fds[0]) == -1 || dup (fds[0]) == -1) {
+			g_warning ("Fork failed: %s", strerror (errno));
+			exit (1);
+		}
+		close (fds[0]);
+		close (fds[1]);
+		execlp ("p11-kit", "p11-kit", "remote", module, NULL);
+		g_warning ("Exec failed: %s", strerror (errno));
+		exit (1);
+	}
+
+	close (fds[0]);
+	return fds[1];
+}
+
+static void
+impl_secret_agent_old_get_p11_socket (NMSecretAgentOld *self,
+                                      GDBusMethodInvocation *context,
+                                      GUnixFDList *in_fd_list,
+                                      const char *module,
+                                      gpointer user_data)
+{
+	NMSecretAgentOldPrivate *priv = NM_SECRET_AGENT_OLD_GET_PRIVATE (self);
+	GError *error = NULL;
+	int fd;
+	pid_t kid;
+	GUnixFDList *fd_list;
+
+	if (!module) {
+		g_set_error_literal (&error,
+		                     NM_SECRET_AGENT_ERROR,
+		                     NM_SECRET_AGENT_ERROR_FAILED,
+		                     "Required module argument is missing.");
+		g_dbus_method_invocation_take_error (context, error);
+		return;
+	}
+
+	if (!verify_sender (self, context, &error)) {
+		g_dbus_method_invocation_take_error (context, error);
+		return;
+	}
+
+	if (!(priv->capabilities & NM_SECRET_AGENT_CAPABILITY_P11_SOCKET)) {
+		g_set_error_literal (&error,
+		                     NM_SECRET_AGENT_ERROR,
+		                     NM_SECRET_AGENT_ERROR_NO_SECRETS,
+		                     "The secret agent does not support p11 socket remoting.");
+		g_dbus_method_invocation_take_error (context, error);
+		return;
+	}
+
+	fd = p11_remote_fd (module, &kid, &error);
+	if (fd == -1) {
+		g_dbus_method_invocation_take_error (context, error);
+		return;
+	}
+
+	fd_list = g_unix_fd_list_new_from_array (&fd, 1);
+	nmdbus_secret_agent_complete_get_p11_socket (priv->dbus_secret_agent,
+	                                             context,
+	                                             fd_list,
+	                                             g_variant_new_handle (0));
+	g_object_unref (fd_list);
 }
 
 static void
@@ -1021,6 +1115,7 @@ nm_secret_agent_old_init (NMSecretAgentOld *self)
 	_nm_dbus_bind_properties (self, priv->dbus_secret_agent);
 	_nm_dbus_bind_methods (self, priv->dbus_secret_agent,
 	                       "GetSecrets", impl_secret_agent_old_get_secrets,
+	                       "GetP11Socket", impl_secret_agent_old_get_p11_socket,
 	                       "CancelGetSecrets", impl_secret_agent_old_cancel_get_secrets,
 	                       "DeleteSecrets", impl_secret_agent_old_delete_secrets,
 	                       "SaveSecrets", impl_secret_agent_old_save_secrets,

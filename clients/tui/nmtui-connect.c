@@ -233,7 +233,7 @@ activate_connection (NMConnection *connection,
 	label = nmt_newt_label_new (_("Connecting..."));
 	nmt_newt_form_set_content (form, label);
 
-	agent = nm_secret_agent_simple_new ("nmtui");
+	agent = nm_secret_agent_simple_new ("nmtui", NM_SECRET_AGENT_CAPABILITY_VPN_HINTS);
 	if (agent) {
 		if (connection) {
 			nm_secret_agent_simple_enable (NM_SECRET_AGENT_SIMPLE (agent),

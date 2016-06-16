@@ -2322,7 +2322,7 @@ nmc_activate_connection (NmCli *nmc,
 	nmc->pwds_hash = pwds_hash;
 
 	/* Create secret agent */
-	nmc->secret_agent = nm_secret_agent_simple_new ("nmcli-connect");
+	nmc->secret_agent = nm_secret_agent_simple_new ("nmcli-connect", NM_SECRET_AGENT_CAPABILITY_VPN_HINTS);
 	if (nmc->secret_agent) {
 		g_signal_connect (nmc->secret_agent, "request-secrets", G_CALLBACK (nmc_secrets_requested), nmc);
 		if (connection) {
