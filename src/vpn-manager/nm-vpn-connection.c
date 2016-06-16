@@ -103,7 +103,7 @@ typedef struct {
 
 	NMDefaultRouteManager *default_route_manager;
 	NMRouteManager *route_manager;
-	GDBusProxy *proxy;
+	NMDBusVpnPlugin *proxy;
 	GCancellable *cancellable;
 	GVariant *connect_hash;
 	guint connect_timeout;
@@ -333,14 +333,10 @@ call_plugin_disconnect (NMVpnConnection *self)
 {
 	NMVpnConnectionPrivate *priv = NM_VPN_CONNECTION_GET_PRIVATE (self);
 
-	g_dbus_proxy_call (priv->proxy,
-	                   "Disconnect",
-	                   NULL,
-	                   G_DBUS_CALL_FLAGS_NONE,
-	                   -1,
-	                   priv->cancellable,
-	                   (GAsyncReadyCallback) disconnect_cb,
-	                   g_object_ref (self));
+	nmdbus_vpn_plugin_call_disconnect (priv->proxy
+	                                   priv->cancellable,
+	                                   (GAsyncReadyCallback) disconnect_cb,
+	                                   g_object_ref (self));
 }
 
 static void
@@ -1701,14 +1697,11 @@ connect_interactive_cb (GDBusProxy *proxy, GAsyncResult *result, gpointer user_d
 		_LOGD ("VPN connection: falling back to non-interactive connect");
 
 		/* Fall back to Connect() */
-		g_dbus_proxy_call (priv->proxy,
-		                   "Connect",
-		                   g_variant_new ("(@a{sa{sv}})", priv->connect_hash),
-		                   G_DBUS_CALL_FLAGS_NONE,
-		                   -1,
-		                   priv->cancellable,
-		                   (GAsyncReadyCallback) connect_cb,
-		                   self);
+		nmdbus_vpn_plugin_call_connect (priv->proxy,
+		                                priv->connect_hash,
+		                                priv->cancellable,
+		                                (GAsyncReadyCallback) connect_cb,
+		                                self);
 	} else if (error) {
 		g_dbus_error_strip_remote_error (error);
 		_LOGW ("VPN connection: failed to connect interactively: '%s'",
@@ -1768,24 +1761,19 @@ really_activate (NMVpnConnection *self, const char *username)
 		_LOGD ("Allowing interactive secrets as all agents have that capability");
 
 		g_variant_builder_init (&details, G_VARIANT_TYPE_VARDICT);
-		g_dbus_proxy_call (priv->proxy,
-		                   "ConnectInteractive",
-		                   g_variant_new ("(@a{sa{sv}}a{sv})", priv->connect_hash, &details),
-		                   G_DBUS_CALL_FLAGS_NONE,
-		                   -1,
-		                   priv->cancellable,
-		                   (GAsyncReadyCallback) connect_interactive_cb,
-		                   self);
+		nmdbus_vpn_plugin_call_connect_interactive (priv->proxy,
+		                                            priv->connect_hash,
+		                                            g_variant_builder_end (&details),
+		                                            priv->cancellable,
+		                                            (GAsyncReadyCallback) connect_interactive_cb,
+		                                            self);
 	} else {
 		_LOGD ("Calling old Connect function as not all agents support interactive secrets");
-		g_dbus_proxy_call (priv->proxy,
-		                   "Connect",
-		                   g_variant_new ("(@a{sa{sv}})", priv->connect_hash),
-		                   G_DBUS_CALL_FLAGS_NONE,
-		                   -1,
-		                   priv->cancellable,
-		                   (GAsyncReadyCallback) connect_cb,
-		                   self);
+		nmdbus_vpn_plugin_call_connect (priv->proxy,
+		                                priv->connect_hash,
+		                                priv->cancellable,
+		                                (GAsyncReadyCallback) connect_cb,
+		                                self);
 	}
 
 	_set_vpn_state (self, STATE_CONNECT, NM_VPN_CONNECTION_STATE_REASON_NONE, FALSE);
@@ -1881,17 +1869,17 @@ _name_owner_changed (GObject *object,
 		nm_clear_g_source (&priv->start_timeout);
 
 		/* Expect success because the VPN service has already appeared */
-		_nm_dbus_signal_connect (priv->proxy, "Failure", G_VARIANT_TYPE ("(u)"),
+		_nm_dbus_signal_connect (G_DBUS_PROXY (priv->proxy), "Failure", G_VARIANT_TYPE ("(u)"),
 		                         G_CALLBACK (failure_cb), self);
-		_nm_dbus_signal_connect (priv->proxy, "StateChanged", G_VARIANT_TYPE ("(u)"),
+		_nm_dbus_signal_connect (G_DBUS_PROXY (priv->proxy), "StateChanged", G_VARIANT_TYPE ("(u)"),
 		                         G_CALLBACK (state_changed_cb), self);
-		_nm_dbus_signal_connect (priv->proxy, "SecretsRequired", G_VARIANT_TYPE ("(sas)"),
+		_nm_dbus_signal_connect (G_DBUS_PROXY (priv->proxy), "SecretsRequired", G_VARIANT_TYPE ("(sas)"),
 		                         G_CALLBACK (secrets_required_cb), self);
-		_nm_dbus_signal_connect (priv->proxy, "Config", G_VARIANT_TYPE ("(a{sv})"),
+		_nm_dbus_signal_connect (G_DBUS_PROXY (priv->proxy), "Config", G_VARIANT_TYPE ("(a{sv})"),
 		                         G_CALLBACK (config_cb), self);
-		_nm_dbus_signal_connect (priv->proxy, "Ip4Config", G_VARIANT_TYPE ("(a{sv})"),
+		_nm_dbus_signal_connect (G_DBUS_PROXY (priv->proxy), "Ip4Config", G_VARIANT_TYPE ("(a{sv})"),
 		                         G_CALLBACK (ip4_config_cb), self);
-		_nm_dbus_signal_connect (priv->proxy, "Ip6Config", G_VARIANT_TYPE ("(a{sv})"),
+		_nm_dbus_signal_connect (G_DBUS_PROXY (priv->proxy), "Ip6Config", G_VARIANT_TYPE ("(a{sv})"),
 		                         G_CALLBACK (ip6_config_cb), self);
 
 		_set_vpn_state (self, STATE_NEED_AUTH, NM_VPN_CONNECTION_STATE_REASON_NONE, FALSE);
@@ -2034,9 +2022,9 @@ on_proxy_acquired (GObject *object, GAsyncResult *result, gpointer user_data)
 	NMVpnConnection *self;
 	NMVpnConnectionPrivate *priv;
 	gs_free_error GError *error = NULL;
-	GDBusProxy *proxy;
+	NMDBusVpnPlugin *proxy;
 
-	proxy = g_dbus_proxy_new_for_bus_finish (result, &error);
+	proxy = nmdbus_vpn_plugin_proxy_new_for_bus_finish (result, &error);
 	if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
 		return;
 
@@ -2106,15 +2094,13 @@ nm_vpn_connection_activate (NMVpnConnection *self,
 	priv->plugin_info = g_object_ref (plugin_info);
 	priv->cancellable = g_cancellable_new ();
 
-	g_dbus_proxy_new_for_bus (G_BUS_TYPE_SYSTEM,
-	                          G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
-	                          NULL,
-	                          priv->bus_name,
-	                          NM_VPN_DBUS_PLUGIN_PATH,
-	                          NM_VPN_DBUS_PLUGIN_INTERFACE,
-	                          priv->cancellable,
-	                          (GAsyncReadyCallback) on_proxy_acquired,
-	                          self);
+	nmdbus_vpn_plugin_proxy_new_for_bus (G_BUS_TYPE_SYSTEM,
+	                                     G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
+	                                     priv->bus_name,
+	                                     NM_VPN_DBUS_PLUGIN_PATH,
+	                                     priv->cancellable,
+	                                     (GAsyncReadyCallback) on_proxy_acquired,
+	                                     self);
 
 	_set_vpn_state (self, STATE_PREPARE, NM_VPN_CONNECTION_STATE_REASON_NONE, FALSE);
 }
@@ -2371,26 +2357,20 @@ get_secrets_cb (NMSettingsConnection *connection,
 		_LOGD ("sending secrets to the plugin");
 
 		/* Send the secrets back to the plugin */
-		g_dbus_proxy_call (priv->proxy,
-		                   "NewSecrets",
-		                   g_variant_new ("(@a{sa{sv}})", dict),
-		                   G_DBUS_CALL_FLAGS_NONE,
-		                   -1,
-		                   priv->cancellable,
-		                   (GAsyncReadyCallback) plugin_new_secrets_cb,
-		                   self);
+		nmdbus_vpn_plugin_call_new_secrets (priv->proxy,
+		                                    dict,
+		                                    priv->cancellable,
+		                                    (GAsyncReadyCallback) plugin_new_secrets_cb,
+		                                    self);
 	} else {
 		_LOGD ("asking service if additional secrets are required");
 
 		/* Ask the VPN service if more secrets are required */
-		g_dbus_proxy_call (priv->proxy,
-		                   "NeedSecrets",
-		                   g_variant_new ("(@a{sa{sv}})", dict),
-		                   G_DBUS_CALL_FLAGS_NONE,
-		                   -1,
-		                   priv->cancellable,
-		                   (GAsyncReadyCallback) plugin_need_secrets_cb,
-		                   self);
+		nmdbus_vpn_plugin_call_need_secrets (priv->proxy,
+		                                     dict,
+		                                     priv->cancellable,
+		                                     (GAsyncReadyCallback) plugin_need_secrets_cb,
+		                                     self);
 	}
 }
 
