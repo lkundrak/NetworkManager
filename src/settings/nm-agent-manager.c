@@ -81,6 +81,7 @@ NM_DEFINE_SINGLETON_INSTANCE (NMAgentManager);
 typedef enum {
 	REQUEST_TYPE_INVALID,
 	REQUEST_TYPE_CON_GET,
+	REQUEST_TYPE_P11_GET,
 	REQUEST_TYPE_CON_SAVE,
 	REQUEST_TYPE_CON_DEL,
 } RequestType;
@@ -89,9 +90,10 @@ static const char *
 _request_type_to_string (RequestType request_type, gboolean verbose)
 {
 	switch (request_type) {
-	case REQUEST_TYPE_CON_GET:  return verbose ? "getting"  : "get";
-	case REQUEST_TYPE_CON_SAVE: return verbose ? "saving"   : "sav";
-	case REQUEST_TYPE_CON_DEL:  return verbose ? "deleting" : "del";
+	case REQUEST_TYPE_CON_GET:  return verbose ? "getting secrets"    : "get";
+	case REQUEST_TYPE_P11_GET:  return verbose ? "getting p11 socket" : "p11";
+	case REQUEST_TYPE_CON_SAVE: return verbose ? "saving secrets"     : "sav";
+	case REQUEST_TYPE_CON_DEL:  return verbose ? "deleting secrets"   : "del";
 	default: return "??";
 	}
 }
@@ -133,6 +135,7 @@ static void request_remove_agent (Request *req, NMSecretAgent *agent, GSList **p
 static void request_next_agent (Request *req);
 
 static void _con_get_request_start (Request *req);
+static void _p11_get_request_start (Request *req);
 static void _con_save_request_start (Request *req);
 static void _con_del_request_start (Request *req);
 
@@ -478,6 +481,11 @@ struct _NMAgentManagerCallId {
 				} get;
 			};
 		} con;
+		struct {
+			char *module;
+			NMAgentP11SocketResultFunc callback;
+			gpointer callback_data;
+		} p11;
 	};
 };
 
@@ -514,6 +522,10 @@ request_free (Request *req)
 			if (req->con.get.existing_secrets)
 				g_variant_unref (req->con.get.existing_secrets);
 		}
+		break;
+	case REQUEST_TYPE_P11_GET:
+		if (req->request_type == REQUEST_TYPE_P11_GET)
+			g_free (req->p11.module);
 		break;
 	default:
 		g_assert_not_reached ();
@@ -567,6 +579,15 @@ req_complete_release (Request *req,
 		                       req->con.get.callback_data);
 
 		break;
+	case REQUEST_TYPE_P11_GET:
+		req->p11.callback (self,
+		                   agent_dbus_owner,
+		                   agent_username,
+		                   fd,
+		                   error,
+		                   req->p11.callback_data);
+
+		break;
 	case REQUEST_TYPE_CON_SAVE:
 	case REQUEST_TYPE_CON_DEL:
 		break;
@@ -602,7 +623,7 @@ req_complete (Request *req,
 
 	if (!g_hash_table_remove (priv->requests, req))
 		g_return_if_reached ();
-	req_complete_release (req, secrets, -1, agent_dbus_owner, agent_username, error);
+	req_complete_release (req, secrets, fd, agent_dbus_owner, agent_username, error);
 }
 
 static void
@@ -728,13 +749,16 @@ request_next_agent (Request *req)
 		req->current = req->pending->data;
 		req->pending = g_slist_remove (req->pending, req->current);
 
-		_LOGD (req->current, "agent %s secrets for request "LOG_REQ_FMT,
+		_LOGD (req->current, "agent %s for request "LOG_REQ_FMT,
 		       _request_type_to_string (req->request_type, TRUE),
 		       LOG_REQ_ARG (req));
 
 		switch (req->request_type) {
 		case REQUEST_TYPE_CON_GET:
 			_con_get_request_start (req);
+			break;
+		case REQUEST_TYPE_P11_GET:
+			_p11_get_request_start (req);
 			break;
 		case REQUEST_TYPE_CON_SAVE:
 			_con_save_request_start (req);
@@ -780,6 +804,9 @@ request_remove_agent (Request *req, NMSecretAgent *agent, GSList **pending_reqs)
 				nm_auth_chain_unref (req->con.chain);
 				req->con.chain = NULL;
 			}
+			break;
+		case REQUEST_TYPE_P11_GET:
+			g_free (req->p11.module);
 			break;
 		default:
 			g_assert_not_reached ();
@@ -1264,6 +1291,98 @@ nm_agent_manager_cancel_secrets (NMAgentManager *self,
 		g_return_if_reached ();
 
 	req_complete_cancel (request_id, FALSE);
+}
+
+/*************************************************************/
+
+static void
+_p11_get_request_done (NMSecretAgent *agent,
+                       NMSecretAgentCallId call_id,
+                       GVariant *secrets,
+                       int fd,
+                       GError *error,
+                       gpointer user_data)
+{
+	NMAgentManager *self;
+	Request *req = user_data;
+	const char *agent_dbus_owner;
+
+	g_return_if_fail (call_id == req->current_call_id);
+	g_return_if_fail (agent == req->current);
+	g_return_if_fail (req->request_type == REQUEST_TYPE_P11_GET);
+
+	self = req->self;
+
+	req->current_call_id = NULL;
+
+	if (error) {
+		if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+			_LOGD (agent, "p11 socket request cancelled: "LOG_REQ_FMT,
+			       LOG_REQ_ARG (req));
+			return;
+		}
+
+		_LOGD (agent, "agent failed p11 socket request "LOG_REQ_FMT": %s",
+		       LOG_REQ_ARG (req), error->message);
+		/* Try the next agent */
+		request_next_agent (req);
+		maybe_remove_agent_on_error (agent, error);
+		return;
+	}
+
+	_LOGD (agent, "agent returned p11 socket %d for request "LOG_REQ_FMT, fd,
+	       LOG_REQ_ARG (req));
+
+	agent_dbus_owner = nm_secret_agent_get_dbus_owner (agent);
+	req_complete (req, NULL, fd, NULL, agent_dbus_owner, NULL);
+}
+
+static void
+_p11_get_request_start (Request *req)
+{
+	req->current_call_id = nm_secret_agent_get_p11_socket (req->current,
+	                                                       req->p11.module,
+	                                                       _p11_get_request_done,
+	                                                       req);
+	if (!req->current_call_id) {
+		g_warn_if_reached ();
+		request_next_agent (req);
+	}
+}
+
+NMAgentManagerCallId
+nm_agent_manager_get_p11_socket (NMAgentManager *self,
+                                 NMAuthSubject *subject,
+                                 const char *module,
+                                 NMAgentP11SocketResultFunc callback,
+                                 gpointer callback_data)
+{
+	NMAgentManagerPrivate *priv = NM_AGENT_MANAGER_GET_PRIVATE (self);
+	Request *req;
+
+	g_return_val_if_fail (self != NULL, NULL);
+	g_return_val_if_fail (module != NULL, NULL);
+	g_return_val_if_fail (callback != NULL, NULL);
+
+	nm_log_dbg (LOGD_SETTINGS,
+	            "PKCS#11 remoting requested for module %s",
+	            module);
+
+	req = request_new (self,
+	                   REQUEST_TYPE_P11_GET,
+	                   NULL,
+	                   subject);
+
+	req->p11.module = g_strdup (module);
+	req->p11.callback = callback;
+	req->p11.callback_data = callback_data;
+
+	if (!nm_g_hash_table_add (priv->requests, req))
+		g_assert_not_reached ();
+
+	request_add_agents (self, req);
+	req->idle_id = g_idle_add (request_start, req);
+	return req;
 }
 
 /*************************************************************/

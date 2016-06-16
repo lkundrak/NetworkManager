@@ -63,6 +63,13 @@ typedef void (*NMAgentSecretsResultFunc) (NMAgentManager *manager,
                                           GError *error,
                                           gpointer user_data);
 
+typedef void (*NMAgentP11SocketResultFunc) (NMAgentManager *manager,
+                                            const char *agent_dbus_owner,
+                                            const char *agent_uname,
+                                            int fd,
+                                            GError *error,
+                                            gpointer user_data);
+
 NMAgentManagerCallId nm_agent_manager_get_secrets (NMAgentManager *manager,
                                                    const char *path,
                                                    NMConnection *connection,
@@ -73,6 +80,12 @@ NMAgentManagerCallId nm_agent_manager_get_secrets (NMAgentManager *manager,
                                                    const char **hints,
                                                    NMAgentSecretsResultFunc callback,
                                                    gpointer callback_data);
+
+NMAgentManagerCallId nm_agent_manager_get_p11_socket (NMAgentManager *self,
+                                                      NMAuthSubject *subject,
+                                                      const char *module,
+                                                      NMAgentP11SocketResultFunc callback,
+                                                      gpointer callback_data);
 
 void nm_agent_manager_cancel_secrets (NMAgentManager *manager,
                                       NMAgentManagerCallId request_id);
