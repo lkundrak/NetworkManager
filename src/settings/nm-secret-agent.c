@@ -22,6 +22,7 @@
 
 #include <sys/types.h>
 #include <pwd.h>
+#include <gio/gunixfdlist.h>
 
 #include "nm-dbus-interface.h"
 #include "nm-secret-agent.h"
@@ -370,6 +371,60 @@ nm_secret_agent_get_secrets (NMSecretAgent *self,
 	                                      flags,
 	                                      r->cancellable,
 	                                      get_callback, r);
+
+	return r;
+}
+
+/*************************************************************/
+
+static void
+p11_socket_callback (GObject *proxy,
+                     GAsyncResult *result,
+                     gpointer user_data)
+{
+	Request *r = user_data;
+
+	if (request_check_return (r)) {
+		NMSecretAgentPrivate *priv = NM_SECRET_AGENT_GET_PRIVATE (r->agent);
+		gs_free_error GError *error = NULL;
+		GUnixFDList *fd_list = NULL;
+		GVariant *socket;
+		int fd = -1;
+
+		nmdbus_secret_agent_call_get_p11_socket_finish (priv->proxy, &socket, &fd_list, result, &error);
+		if (error)
+			g_dbus_error_strip_remote_error (error);
+		else
+			fd = g_unix_fd_list_get (fd_list, g_variant_get_handle (socket), &error);
+		r->callback (r->agent, r, NULL, fd, error, r->callback_data);
+		g_clear_object (&fd_list);
+	}
+
+	request_free (r);
+}
+
+NMSecretAgentCallId
+nm_secret_agent_get_p11_socket (NMSecretAgent *self,
+                                const char *module,
+                                NMSecretAgentCallback callback,
+                                gpointer callback_data)
+{
+	NMSecretAgentPrivate *priv;
+	Request *r;
+
+	g_return_val_if_fail (NM_IS_SECRET_AGENT (self), NULL);
+	g_return_val_if_fail (module != NULL, NULL);
+
+	priv = NM_SECRET_AGENT_GET_PRIVATE (self);
+	g_return_val_if_fail (priv->proxy != NULL, NULL);
+
+	r = request_new (self, "GetP11Socket", NULL, NULL, callback, callback_data);
+	g_hash_table_add (priv->requests, r);
+	nmdbus_secret_agent_call_get_p11_socket (priv->proxy,
+	                                         module,
+	                                         NULL,
+	                                         r->cancellable,
+	                                         p11_socket_callback, r);
 
 	return r;
 }
