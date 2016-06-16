@@ -324,7 +324,7 @@ get_callback (GObject *proxy,
 		nmdbus_secret_agent_call_get_secrets_finish (priv->proxy, &secrets, result, &error);
 		if (error)
 			g_dbus_error_strip_remote_error (error);
-		r->callback (r->agent, r, secrets, error, r->callback_data);
+		r->callback (r->agent, r, secrets, -1, error, r->callback_data);
 	}
 
 	request_free (r);
@@ -433,7 +433,7 @@ do_cancel_secrets (NMSecretAgent *self, Request *r, gboolean disposing)
 		nm_utils_error_set_cancelled (&error, disposing, "NMSecretAgent");
 		/* @r might be a dangling pointer at this point. However, that is no problem
 		 * to pass it as (opaque) call_id. */
-		callback (self, r, NULL, error, callback_data);
+		callback (self, r, NULL, -1, error, callback_data);
 	}
 }
 
@@ -480,7 +480,7 @@ agent_save_cb (GObject *proxy,
 		nmdbus_secret_agent_call_save_secrets_finish (priv->proxy, result, &error);
 		if (error)
 			g_dbus_error_strip_remote_error (error);
-		r->callback (r->agent, r, NULL, error, r->callback_data);
+		r->callback (r->agent, r, NULL, -1, error, r->callback_data);
 	}
 
 	request_free (r);
@@ -533,7 +533,7 @@ agent_delete_cb (GObject *proxy,
 		nmdbus_secret_agent_call_delete_secrets_finish (priv->proxy, result, &error);
 		if (error)
 			g_dbus_error_strip_remote_error (error);
-		r->callback (r->agent, r, NULL, error, r->callback_data);
+		r->callback (r->agent, r, NULL, -1, error, r->callback_data);
 	}
 
 	request_free (r);

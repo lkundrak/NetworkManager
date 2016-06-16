@@ -546,9 +546,10 @@ request_free (Request *req)
 static void
 req_complete_release (Request *req,
                       GVariant *secrets,
+                      int fd,
                       const char *agent_dbus_owner,
                       const char *agent_username,
-                     GError *error)
+                      GError *error)
 {
 	NMAgentManager *self = req->self;
 
@@ -585,12 +586,13 @@ req_complete_cancel (Request *req, gboolean is_disposing)
 	nm_assert (!g_hash_table_contains (NM_AGENT_MANAGER_GET_PRIVATE (req->self)->requests, req));
 
 	nm_utils_error_set_cancelled (&error, is_disposing, "NMAgentManager");
-	req_complete_release (req, NULL, NULL, NULL, error);
+	req_complete_release (req, NULL, -1, NULL, NULL, error);
 }
 
 static void
 req_complete (Request *req,
               GVariant *secrets,
+              int fd,
               const char *agent_dbus_owner,
               const char *agent_username,
               GError *error)
@@ -600,13 +602,13 @@ req_complete (Request *req,
 
 	if (!g_hash_table_remove (priv->requests, req))
 		g_return_if_reached ();
-	req_complete_release (req, secrets, agent_dbus_owner, agent_username, error);
+	req_complete_release (req, secrets, -1, agent_dbus_owner, agent_username, error);
 }
 
 static void
 req_complete_error (Request *req, GError *error)
 {
-	req_complete (req, NULL, NULL, NULL, error);
+	req_complete (req, NULL, -1, NULL, NULL, error);
 }
 
 static gint
@@ -821,6 +823,7 @@ static void
 _con_get_request_done (NMSecretAgent *agent,
                        NMSecretAgentCallId call_id,
                        GVariant *secrets,
+                       int fd,
                        GError *error,
                        gpointer user_data)
 {
@@ -891,7 +894,7 @@ _con_get_request_done (NMSecretAgent *agent,
 	}
 
 	agent_dbus_owner = nm_secret_agent_get_dbus_owner (agent);
-	req_complete (req, secrets, agent_dbus_owner, agent_uname, NULL);
+	req_complete (req, secrets, -1, agent_dbus_owner, agent_uname, NULL);
 	g_free (agent_uname);
 }
 
@@ -1147,7 +1150,7 @@ _con_get_try_complete_early (Request *req)
 		       LOG_REQ_ARG (req));
 
 		/* Got everything, we're done */
-		req_complete (req, req->con.get.existing_secrets, NULL, NULL, NULL);
+		req_complete (req, req->con.get.existing_secrets, -1, NULL, NULL, NULL);
 		return TRUE;
 	}
 
@@ -1159,7 +1162,7 @@ _con_get_try_complete_early (Request *req)
 	    && !req->pending) {
 		/* The request initiated from GetSecrets() via DBus,
 		 * don't error out if any secrets are missing. */
-		req_complete (req, req->con.get.existing_secrets, NULL, NULL, NULL);
+		req_complete (req, req->con.get.existing_secrets, -1, NULL, NULL, NULL);
 		return TRUE;
 	}
 
@@ -1269,6 +1272,7 @@ static void
 _con_save_request_done (NMSecretAgent *agent,
                         NMSecretAgentCallId call_id,
                         GVariant *secrets,
+                        int fd,
                         GError *error,
                         gpointer user_data)
 {
@@ -1303,7 +1307,7 @@ _con_save_request_done (NMSecretAgent *agent,
 	       LOG_REQ_ARG (req));
 
 	agent_dbus_owner = nm_secret_agent_get_dbus_owner (agent);
-	req_complete (req, NULL, NULL, agent_dbus_owner, NULL);
+	req_complete (req, NULL, -1, NULL, agent_dbus_owner, NULL);
 }
 
 static void
@@ -1358,6 +1362,7 @@ static void
 _con_del_request_done (NMSecretAgent *agent,
                        NMSecretAgentCallId call_id,
                        GVariant *secrets,
+                       int fd,
                        GError *error,
                        gpointer user_data)
 {

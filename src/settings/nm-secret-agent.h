@@ -77,7 +77,8 @@ gboolean    nm_secret_agent_has_permission (NMSecretAgent *agent,
 
 typedef void (*NMSecretAgentCallback) (NMSecretAgent *agent,
                                        NMSecretAgentCallId call_id,
-                                       GVariant *new_secrets, /* NULL for save & delete */
+                                       GVariant *new_secrets, /* NULL for save, delete & p11 socket */
+                                       int fd,                /* p11 socket or -1 for get, save and delete */
                                        GError *error,
                                        gpointer user_data);
 
