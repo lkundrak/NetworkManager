@@ -438,6 +438,8 @@ NMSetting8021xCKScheme
 nm_setting_802_1x_check_cert_scheme (gconstpointer pdata, gsize length, GError **error)
 {
 	const char *data = pdata;
+	NMSetting8021xCKScheme scheme;
+	gsize prefix_length;
 
 	g_return_val_if_fail (!length || data, NM_SETTING_802_1X_CK_SCHEME_UNKNOWN);
 
@@ -449,10 +451,21 @@ nm_setting_802_1x_check_cert_scheme (gconstpointer pdata, gsize length, GError *
 		return NM_SETTING_802_1X_CK_SCHEME_UNKNOWN;
 	}
 
-	/* interpret the blob as PATH if it starts with "file://". */
 	if (   length >= NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH)
 	    && !memcmp (data, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH, NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH))) {
-		/* But it must also be NUL terminated, contain at least
+		scheme = NM_SETTING_802_1X_CK_SCHEME_PATH;
+		prefix_length = NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
+	} else if (   length >= NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PKCS11)
+	           && !memcmp (data, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PKCS11, NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PKCS11))) {
+		scheme = NM_SETTING_802_1X_CK_SCHEME_PKCS11;
+		prefix_length = NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PKCS11);
+	} else {
+		scheme = NM_SETTING_802_1X_CK_SCHEME_BLOB;
+		prefix_length = 0;
+	}
+
+	if (scheme != NM_SETTING_802_1X_CK_SCHEME_BLOB) {
+		/* An actual URI must be NUL terminated, contain at least
 		 * one non-NUL character, and contain only one trailing NUL
 		 * chracter.
 		 * And ensure it's UTF-8 valid too so we can pass it through
@@ -462,31 +475,29 @@ nm_setting_802_1x_check_cert_scheme (gconstpointer pdata, gsize length, GError *
 			g_set_error_literal (error,
 			                     NM_CONNECTION_ERROR,
 			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			                     _("file:// URI not NUL terminated"));
+			                     _("URI not NUL terminated"));
 			return NM_SETTING_802_1X_CK_SCHEME_UNKNOWN;
 		}
 		length--;
 
-		if (length <= NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH)) {
+		if (length <= prefix_length) {
 			g_set_error_literal (error,
 			                     NM_CONNECTION_ERROR,
 			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			                     _("file:// URI is empty"));
+			                     _("URI is empty"));
 			return NM_SETTING_802_1X_CK_SCHEME_UNKNOWN;
 		}
 
-		if (!g_utf8_validate (data + NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH), length - NM_STRLEN (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH), NULL)) {
+		if (!g_utf8_validate (data + prefix_length, length - prefix_length, NULL)) {
 			g_set_error_literal (error,
-			                     NM_CONNECTION_ERROR,
-			                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			                     _("file:// URI is not valid UTF-8"));
+					     NM_CONNECTION_ERROR,
+					     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+					     _("URI is not valid UTF-8"));
 			return NM_SETTING_802_1X_CK_SCHEME_UNKNOWN;
 		}
-
-		return NM_SETTING_802_1X_CK_SCHEME_PATH;
 	}
 
-	return NM_SETTING_802_1X_CK_SCHEME_BLOB;
+	return scheme;
 }
 
 static GByteArray *
@@ -588,6 +599,37 @@ nm_setting_802_1x_get_ca_cert_path (NMSetting8021x *setting)
 
 	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->ca_cert, NULL);
 	return (const char *)data + strlen (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
+}
+
+/**
+ * nm_setting_802_1x_get_ca_cert_uri:
+ * @setting: the #NMSetting8021x
+ *
+ * Returns the CA certificate URI analogously to
+ * nm_setting_802_1x_get_ca_cert_blob() and
+ * nm_setting_802_1x_get_ca_cert_path().
+ *
+ * Currently it's limited to PKCS#11 URIs ('pkcs11' scheme as defined by RFC
+ * 7512), but may be extended to other schemes in future (such as 'file' URIs
+ * for local files and 'data' URIs for inline certificate data).
+ *
+ * Returns: the URI string
+ *
+ * Since: 1.6
+ **/
+const char *
+nm_setting_802_1x_get_ca_cert_uri (NMSetting8021x *setting)
+{
+	NMSetting8021xCKScheme scheme;
+	gconstpointer data;
+
+	g_return_val_if_fail (NM_IS_SETTING_802_1X (setting), NULL);
+
+	scheme = nm_setting_802_1x_get_ca_cert_scheme (setting);
+	g_return_val_if_fail (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11, NULL);
+
+	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->ca_cert, NULL);
+	return (const char *)data;
 }
 
 static GBytes *
@@ -936,6 +978,37 @@ nm_setting_802_1x_get_client_cert_path (NMSetting8021x *setting)
 }
 
 /**
+ * nm_setting_802_1x_get_client_cert_uri:
+ * @setting: the #NMSetting8021x
+ *
+ * Returns the client certificate URI analogously to
+ * nm_setting_802_1x_get_client_cert_blob() and
+ * nm_setting_802_1x_get_client_cert_path().
+ *
+ * Currently it's limited to PKCS#11 URIs ('pkcs11' scheme as defined by RFC
+ * 7512), but may be extended to other schemes in future (such as 'file' URIs
+ * for local files and 'data' URIs for inline certificate data).
+ *
+ * Returns: the URI string
+ *
+ * Since: 1.6
+ **/
+const char *
+nm_setting_802_1x_get_client_cert_uri (NMSetting8021x *setting)
+{
+	NMSetting8021xCKScheme scheme;
+	gconstpointer data;
+
+	g_return_val_if_fail (NM_IS_SETTING_802_1X (setting), NULL);
+
+	scheme = nm_setting_802_1x_get_client_cert_scheme (setting);
+	g_return_val_if_fail (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11, NULL);
+
+	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->client_cert, NULL);
+	return (const char *)data;
+}
+
+/**
  * nm_setting_802_1x_set_client_cert:
  * @setting: the #NMSetting8021x
  * @cert_path: when @scheme is set to either %NM_SETTING_802_1X_CK_SCHEME_PATH
@@ -1202,6 +1275,37 @@ nm_setting_802_1x_get_phase2_ca_cert_path (NMSetting8021x *setting)
 
 	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->phase2_ca_cert, NULL);
 	return (const char *)data + strlen (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
+}
+
+/**
+ * nm_setting_802_1x_get_phase2_ca_cert_uri:
+ * @setting: the #NMSetting8021x
+ *
+ * Returns the "phase 2" CA certificate URI analogously to
+ * nm_setting_802_1x_get_phase2_ca_cert_blob() and
+ * nm_setting_802_1x_get_phase2_ca_cert_path().
+ *
+ * Currently it's limited to PKCS#11 URIs ('pkcs11' scheme as defined by RFC
+ * 7512), but may be extended to other schemes in future (such as 'file' URIs
+ * for local files and 'data' URIs for inline certificate data).
+ *
+ * Returns: the URI string
+ *
+ * Since: 1.6
+ **/
+const char *
+nm_setting_802_1x_get_phase2_ca_cert_uri (NMSetting8021x *setting)
+{
+	NMSetting8021xCKScheme scheme;
+	gconstpointer data;
+
+	g_return_val_if_fail (NM_IS_SETTING_802_1X (setting), NULL);
+
+	scheme = nm_setting_802_1x_get_phase2_ca_cert_scheme (setting);
+	g_return_val_if_fail (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11, NULL);
+
+	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->phase2_ca_cert, NULL);
+	return (const char *)data;
 }
 
 /**
@@ -1535,6 +1639,37 @@ nm_setting_802_1x_get_phase2_client_cert_path (NMSetting8021x *setting)
 }
 
 /**
+ * nm_setting_802_1x_get_phase2_ca_cert_uri:
+ * @setting: the #NMSetting8021x
+ *
+ * Returns the "phase 2" client certificate URI analogously to
+ * nm_setting_802_1x_get_phase2_ca_cert_blob() and
+ * nm_setting_802_1x_get_phase2_ca_cert_path().
+ *
+ * Currently it's limited to PKCS#11 URIs ('pkcs11' scheme as defined by RFC
+ * 7512), but may be extended to other schemes in future (such as 'file' URIs
+ * for local files and 'data' URIs for inline certificate data).
+ *
+ * Returns: the URI string
+ *
+ * Since: 1.6
+ **/
+const char *
+nm_setting_802_1x_get_phase2_client_cert_uri (NMSetting8021x *setting)
+{
+	NMSetting8021xCKScheme scheme;
+	gconstpointer data;
+
+	g_return_val_if_fail (NM_IS_SETTING_802_1X (setting), NULL);
+
+	scheme = nm_setting_802_1x_get_phase2_client_cert_scheme (setting);
+	g_return_val_if_fail (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11, NULL);
+
+	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->phase2_client_cert, NULL);
+	return (const char *)data;
+}
+
+/**
  * nm_setting_802_1x_set_phase2_client_cert:
  * @setting: the #NMSetting8021x
  * @cert_path: when @scheme is set to either %NM_SETTING_802_1X_CK_SCHEME_PATH
@@ -1791,6 +1926,37 @@ nm_setting_802_1x_get_private_key_path (NMSetting8021x *setting)
 
 	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->private_key, NULL);
 	return (const char *)data + strlen (NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
+}
+
+/**
+ * nm_setting_802_1x_get_private_key_uri:
+ * @setting: the #NMSetting8021x
+ *
+ * Returns the private key URI analogously to
+ * nm_setting_802_1x_get_private_key_blob() and
+ * nm_setting_802_1x_get_private_key_path().
+ *
+ * Currently it's limited to PKCS#11 URIs ('pkcs11' scheme as defined by RFC
+ * 7512), but may be extended to other schemes in future (such as 'file' URIs
+ * for local files and 'data' URIs for inline certificate data).
+ *
+ * Returns: the URI string
+ *
+ * Since: 1.6
+ **/
+const char *
+nm_setting_802_1x_get_private_key_uri (NMSetting8021x *setting)
+{
+	NMSetting8021xCKScheme scheme;
+	gconstpointer data;
+
+	g_return_val_if_fail (NM_IS_SETTING_802_1X (setting), NULL);
+
+	scheme = nm_setting_802_1x_get_private_key_scheme (setting);
+	g_return_val_if_fail (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11, NULL);
+
+	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->private_key, NULL);
+	return (const char *)data;
 }
 
 static void
@@ -2132,6 +2298,37 @@ nm_setting_802_1x_get_phase2_private_key_path (NMSetting8021x *setting)
 }
 
 /**
+ * nm_setting_802_1x_get_phase2_private_key_uri:
+ * @setting: the #NMSetting8021x
+ *
+ * Returns the "phase 2" private key URI analogously to
+ * nm_setting_802_1x_get_phase2_private_key_blob() and
+ * nm_setting_802_1x_get_phase2_private_key_path().
+ *
+ * Currently it's limited to PKCS#11 URIs ('pkcs11' scheme as defined by RFC
+ * 7512), but may be extended to other schemes in future (such as 'file' URIs
+ * for local files and 'data' URIs for inline certificate data).
+ *
+ * Returns: the URI string
+ *
+ * Since: 1.6
+ **/
+const char *
+nm_setting_802_1x_get_phase2_private_key_uri (NMSetting8021x *setting)
+{
+	NMSetting8021xCKScheme scheme;
+	gconstpointer data;
+
+	g_return_val_if_fail (NM_IS_SETTING_802_1X (setting), NULL);
+
+	scheme = nm_setting_802_1x_get_phase2_private_key_scheme (setting);
+	g_return_val_if_fail (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11, NULL);
+
+	data = g_bytes_get_data (NM_SETTING_802_1X_GET_PRIVATE (setting)->phase2_private_key, NULL);
+	return (const char *)data;
+}
+
+/**
  * nm_setting_802_1x_set_phase2_private_key:
  * @setting: the #NMSetting8021x
  * @key_path: when @scheme is set to either %NM_SETTING_802_1X_CK_SCHEME_PATH or
@@ -2371,6 +2568,8 @@ need_secrets_tls (NMSetting8021x *self,
 		scheme = nm_setting_802_1x_get_phase2_private_key_scheme (self);
 		if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH)
 			path = nm_setting_802_1x_get_phase2_private_key_path (self);
+		else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11)
+			return;
 		else if (scheme == NM_SETTING_802_1X_CK_SCHEME_BLOB)
 			blob = nm_setting_802_1x_get_phase2_private_key_blob (self);
 		else {
@@ -2385,6 +2584,8 @@ need_secrets_tls (NMSetting8021x *self,
 		scheme = nm_setting_802_1x_get_private_key_scheme (self);
 		if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH)
 			path = nm_setting_802_1x_get_private_key_path (self);
+		else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11)
+			return;
 		else if (scheme == NM_SETTING_802_1X_CK_SCHEME_BLOB)
 			blob = nm_setting_802_1x_get_private_key_blob (self);
 		else {
