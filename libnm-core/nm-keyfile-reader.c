@@ -709,16 +709,14 @@ read_hash_of_string (GKeyFile *file, NMSetting *setting, const char *key)
 static void
 unescape_semicolons (char *str)
 {
-	int i;
-	gsize len = strlen (str);
+	gsize i, j, len = strlen (str);
 
-	for (i = 0; i < len; i++) {
-		if (str[i] == '\\' && str[i+1] == ';') {
-			memmove(str + i, str + i + 1, len - (i + 1));
-			len--;
-		}
-		str[len] = '\0';
+	for (i = 0, j = 0; i < len; ) {
+		if (str[i] == '\\' && str[i+1] == ';')
+			i++;
+		str[j++] = str[i++];
 	}
+	str[j] = '\0';
 }
 
 static GBytes *
