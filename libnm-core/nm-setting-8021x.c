@@ -633,7 +633,7 @@ nm_setting_802_1x_get_ca_cert_uri (NMSetting8021x *setting)
 }
 
 static GBytes *
-path_to_scheme_value (const char *path)
+value_with_scheme (const char *path, const char *scheme)
 {
 	GByteArray *array;
 	gsize len;
@@ -672,7 +672,7 @@ path_to_scheme_value (const char *path)
  **/
 gboolean
 nm_setting_802_1x_set_ca_cert (NMSetting8021x *setting,
-                               const char *cert_path,
+                               const char *value,
                                NMSetting8021xCKScheme scheme,
                                NMSetting8021xCKFormat *out_format,
                                GError **error)
@@ -683,10 +683,11 @@ nm_setting_802_1x_set_ca_cert (NMSetting8021x *setting,
 
 	g_return_val_if_fail (NM_IS_SETTING_802_1X (setting), FALSE);
 
-	if (cert_path) {
-		g_return_val_if_fail (g_utf8_validate (cert_path, -1, NULL), FALSE);
+	if (value) {
+		g_return_val_if_fail (g_utf8_validate (value, -1, NULL), FALSE);
 		g_return_val_if_fail (   scheme == NM_SETTING_802_1X_CK_SCHEME_BLOB
-		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PATH,
+		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PATH
+		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11,
 		                      FALSE);
 	}
 
@@ -697,12 +698,18 @@ nm_setting_802_1x_set_ca_cert (NMSetting8021x *setting,
 
 	g_clear_pointer (&priv->ca_cert, g_bytes_unref);
 
-	if (!cert_path) {
+	if (!value) {
 		g_object_notify (G_OBJECT (setting), NM_SETTING_802_1X_CA_CERT);
 		return TRUE;
 	}
 
-	data = load_and_verify_certificate (cert_path, scheme, &format, error);
+	if (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11) {
+		priv->ca_cert = value_with_scheme (value, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PKCS11);
+		g_object_notify (G_OBJECT (setting), NM_SETTING_802_1X_CA_CERT);
+		return TRUE;
+	}
+
+	data = load_and_verify_certificate (value, scheme, &format, error);
 	if (data) {
 		/* wpa_supplicant can only use raw x509 CA certs */
 		if (format == NM_CRYPTO_FILE_FORMAT_X509) {
@@ -713,7 +720,7 @@ nm_setting_802_1x_set_ca_cert (NMSetting8021x *setting,
 				priv->ca_cert = g_byte_array_free_to_bytes (data);
 				data = NULL;
 			} else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH)
-				priv->ca_cert = path_to_scheme_value (cert_path);
+				priv->ca_cert = value_with_scheme (value, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
 			else
 				g_assert_not_reached ();
 		} else {
@@ -1047,7 +1054,8 @@ nm_setting_802_1x_set_client_cert (NMSetting8021x *setting,
 	if (cert_path) {
 		g_return_val_if_fail (g_utf8_validate (cert_path, -1, NULL), FALSE);
 		g_return_val_if_fail (   scheme == NM_SETTING_802_1X_CK_SCHEME_BLOB
-		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PATH,
+		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PATH
+		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11,
 		                      FALSE);
 	}
 
@@ -1059,6 +1067,12 @@ nm_setting_802_1x_set_client_cert (NMSetting8021x *setting,
 	g_clear_pointer (&priv->client_cert, g_bytes_unref);
 
 	if (!cert_path) {
+		g_object_notify (G_OBJECT (setting), NM_SETTING_802_1X_CLIENT_CERT);
+		return TRUE;
+	}
+
+	if (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11) {
+		priv->client_cert = value_with_scheme (cert_path, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
 		g_object_notify (G_OBJECT (setting), NM_SETTING_802_1X_CLIENT_CERT);
 		return TRUE;
 	}
@@ -1092,7 +1106,7 @@ nm_setting_802_1x_set_client_cert (NMSetting8021x *setting,
 				priv->client_cert = g_byte_array_free_to_bytes (data);
 				data = NULL;
 			} else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH)
-				priv->client_cert = path_to_scheme_value (cert_path);
+				priv->client_cert = value_with_scheme (cert_path, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
 			else
 				g_assert_not_reached ();
 		}
@@ -1370,7 +1384,7 @@ nm_setting_802_1x_set_phase2_ca_cert (NMSetting8021x *setting,
 				priv->phase2_ca_cert = g_byte_array_free_to_bytes (data);
 				data = NULL;
 			} else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH)
-				priv->phase2_ca_cert = path_to_scheme_value (cert_path);
+				priv->phase2_ca_cert = value_with_scheme (cert_path, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
 			else
 				g_assert_not_reached ();
 		} else {
@@ -1754,7 +1768,7 @@ nm_setting_802_1x_set_phase2_client_cert (NMSetting8021x *setting,
 				priv->phase2_client_cert = g_byte_array_free_to_bytes (data);
 				data = NULL;
 			} else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH)
-				priv->phase2_client_cert = path_to_scheme_value (cert_path);
+				priv->phase2_client_cert = value_with_scheme (cert_path, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
 			else
 				g_assert_not_reached ();
 		}
@@ -2026,7 +2040,7 @@ file_to_secure_bytes (const char *filename)
  **/
 gboolean
 nm_setting_802_1x_set_private_key (NMSetting8021x *setting,
-                                   const char *key_path,
+                                   const char *value,
                                    const char *password,
                                    NMSetting8021xCKScheme scheme,
                                    NMSetting8021xCKFormat *out_format,
@@ -2039,10 +2053,11 @@ nm_setting_802_1x_set_private_key (NMSetting8021x *setting,
 
 	g_return_val_if_fail (NM_IS_SETTING_802_1X (setting), FALSE);
 
-	if (key_path) {
-		g_return_val_if_fail (g_utf8_validate (key_path, -1, NULL), FALSE);
+	if (value) {
+		g_return_val_if_fail (g_utf8_validate (value, -1, NULL), FALSE);
 		g_return_val_if_fail (   scheme == NM_SETTING_802_1X_CK_SCHEME_BLOB
-		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PATH,
+		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PATH
+		                      || scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11,
 		                      FALSE);
 	}
 
@@ -2052,8 +2067,8 @@ nm_setting_802_1x_set_private_key (NMSetting8021x *setting,
 	/* Ensure the private key is a recognized format and if the password was
 	 * given, that it decrypts the private key.
 	 */
-	if (key_path) {
-		format = crypto_verify_private_key (key_path, password, NULL, &local_err);
+	if (value && scheme == NM_SETTING_802_1X_CK_SCHEME_PATH) {
+		format = crypto_verify_private_key (value, password, NULL, &local_err);
 		if (format == NM_CRYPTO_FILE_FORMAT_UNKNOWN) {
 			g_set_error_literal (error,
 			                     NM_CONNECTION_ERROR,
@@ -2080,7 +2095,7 @@ nm_setting_802_1x_set_private_key (NMSetting8021x *setting,
 		password_cleared = TRUE;
 	}
 
-	if (key_path == NULL) {
+	if (value == NULL) {
 		if (key_cleared)
 			g_object_notify (G_OBJECT (setting), NM_SETTING_802_1X_PRIVATE_KEY);
 		if (password_cleared)
@@ -2092,17 +2107,18 @@ nm_setting_802_1x_set_private_key (NMSetting8021x *setting,
 	if (scheme == NM_SETTING_802_1X_CK_SCHEME_BLOB) {
 		/* FIXME: potential race after verifying the private key above */
 		/* FIXME: ensure blob doesn't start with file:// */
-		priv->private_key = file_to_secure_bytes (key_path);
+		priv->private_key = file_to_secure_bytes (value);
 		g_assert (priv->private_key);
 	} else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH)
-		priv->private_key = path_to_scheme_value (key_path);
+		priv->private_key = value_with_scheme (value, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
+	else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PKCS11)
+		priv->private_key = value_with_scheme (value, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PKCS11);
 	else
 		g_assert_not_reached ();
 
 	/* As required by NM and wpa_supplicant, set the client-cert
 	 * property to the same PKCS#12 data.
 	 */
-	g_assert (format != NM_CRYPTO_FILE_FORMAT_UNKNOWN);
 	if (format == NM_CRYPTO_FILE_FORMAT_PKCS12) {
 		if (priv->client_cert)
 			g_bytes_unref (priv->client_cert);
@@ -2438,7 +2454,7 @@ nm_setting_802_1x_set_phase2_private_key (NMSetting8021x *setting,
 		priv->phase2_private_key = file_to_secure_bytes (key_path);
 		g_assert (priv->phase2_private_key);
 	} else if (scheme == NM_SETTING_802_1X_CK_SCHEME_PATH)
-		priv->phase2_private_key = path_to_scheme_value (key_path);
+		priv->phase2_private_key = value_with_scheme (key_path, NM_SETTING_802_1X_CERT_SCHEME_PREFIX_PATH);
 	else
 		g_assert_not_reached ();
 
