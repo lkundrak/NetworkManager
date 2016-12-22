@@ -1067,8 +1067,10 @@ nmc_property_802_1X_get_ca_cert (NMSetting *setting, NmcPropertyGetType get_type
 	case NM_SETTING_802_1X_CK_SCHEME_PATH:
 		ca_cert_str = g_strdup (nm_setting_802_1x_get_ca_cert_path (s_8021X));
 		break;
-	default:
+	case NM_SETTING_802_1X_CK_SCHEME_PKCS11:
 		ca_cert_str = g_strdup (nm_setting_802_1x_get_ca_cert_uri (s_8021X));
+		break;
+	case NM_SETTING_802_1X_CK_SCHEME_UNKNOWN:
 		break;
 	}
 
@@ -1093,8 +1095,10 @@ nmc_property_802_1X_get_client_cert (NMSetting *setting,
 	case NM_SETTING_802_1X_CK_SCHEME_PATH:
 		cert_str = g_strdup (nm_setting_802_1x_get_client_cert_path (s_8021X));
 		break;
-	default:
+	case NM_SETTING_802_1X_CK_SCHEME_PKCS11:
 		cert_str = g_strdup (nm_setting_802_1x_get_client_cert_uri (s_8021X));
+		break;
+	case NM_SETTING_802_1X_CK_SCHEME_UNKNOWN:
 		break;
 	}
 
@@ -1120,8 +1124,10 @@ nmc_property_802_1X_get_phase2_ca_cert (NMSetting *setting, NmcPropertyGetType g
 	case NM_SETTING_802_1X_CK_SCHEME_PATH:
 		phase2_ca_cert_str = g_strdup (nm_setting_802_1x_get_phase2_ca_cert_path (s_8021X));
 		break;
-	default:
+	case NM_SETTING_802_1X_CK_SCHEME_PKCS11:
 		phase2_ca_cert_str = g_strdup (nm_setting_802_1x_get_phase2_ca_cert_uri (s_8021X));
+		break;
+	case NM_SETTING_802_1X_CK_SCHEME_UNKNOWN:
 		break;
 	}
 
@@ -1146,8 +1152,10 @@ nmc_property_802_1X_get_phase2_client_cert (NMSetting *setting,
 	case NM_SETTING_802_1X_CK_SCHEME_PATH:
 		cert_str = g_strdup (nm_setting_802_1x_get_phase2_client_cert_path (s_8021X));
 		break;
-	default:
+	case NM_SETTING_802_1X_CK_SCHEME_PKCS11:
 		cert_str = g_strdup (nm_setting_802_1x_get_phase2_client_cert_uri (s_8021X));
+		break;
+	case NM_SETTING_802_1X_CK_SCHEME_UNKNOWN:
 		break;
 	}
 
@@ -1185,8 +1193,10 @@ nmc_property_802_1X_get_private_key (NMSetting *setting,
 	case NM_SETTING_802_1X_CK_SCHEME_PATH:
 		key_str = g_strdup (nm_setting_802_1x_get_private_key_path (s_8021X));
 		break;
-	default:
+	case NM_SETTING_802_1X_CK_SCHEME_PKCS11:
 		key_str = g_strdup (nm_setting_802_1x_get_private_key_uri (s_8021X));
+		break;
+	case NM_SETTING_802_1X_CK_SCHEME_UNKNOWN:
 		break;
 	}
 
@@ -1217,8 +1227,10 @@ nmc_property_802_1X_get_phase2_private_key (NMSetting *setting,
 	case NM_SETTING_802_1X_CK_SCHEME_PATH:
 		key_str = g_strdup (nm_setting_802_1x_get_phase2_private_key_path (s_8021X));
 		break;
-	default:
+	case NM_SETTING_802_1X_CK_SCHEME_PKCS11:
 		key_str = g_strdup (nm_setting_802_1x_get_phase2_private_key_uri (s_8021X));
+		break;
+	case NM_SETTING_802_1X_CK_SCHEME_UNKNOWN:
 		break;
 	}
 
