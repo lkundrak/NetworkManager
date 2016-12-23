@@ -607,6 +607,7 @@ nm_supplicant_config_add_setting_wireless_security (NMSupplicantConfig *self,
                                                     NMSetting8021x *setting_8021x,
                                                     const char *con_uuid,
                                                     guint32 mtu,
+                                                    NMAuthSubject *subject,
                                                     GError **error)
 {
 	const char *key_mgmt, *auth_alg;
@@ -729,8 +730,10 @@ nm_supplicant_config_add_setting_wireless_security (NMSupplicantConfig *self,
 				             "Cannot set key-mgmt %s with missing 8021x setting", key_mgmt);
 				return FALSE;
 			}
-			if (!nm_supplicant_config_add_setting_8021x (self, setting_8021x, con_uuid, mtu, FALSE, error))
+			if (!nm_supplicant_config_add_setting_8021x (self, setting_8021x, con_uuid,
+			                                             mtu, FALSE, subject, error)) {
 				return FALSE;
+			}
 		}
 
 		if (!strcmp (key_mgmt, "wpa-eap")) {
@@ -758,6 +761,7 @@ add_pkcs11_uri_with_pin (NMSupplicantConfig *self,
                          const char *uri,
                          const char *pin,
                          const NMSettingSecretFlags pin_flags,
+                         NMAuthSubject *subject,
                          GError **error)
 {
 	gs_strfreev gchar **split;
@@ -804,6 +808,7 @@ nm_supplicant_config_add_setting_8021x (NMSupplicantConfig *self,
                                         const char *con_uuid,
                                         guint32 mtu,
                                         gboolean wired,
+                                        NMAuthSubject *subject,
                                         GError **error)
 {
 	NMSupplicantConfigPrivate *priv;
@@ -1007,6 +1012,7 @@ nm_supplicant_config_add_setting_8021x (NMSupplicantConfig *self,
 			                              nm_setting_802_1x_get_ca_cert_uri (setting),
 			                              nm_setting_802_1x_get_private_key_password (setting),
 			                              nm_setting_802_1x_get_private_key_password_flags (setting),
+						      subject,
 						      error)) {
 				return FALSE;
 			}
@@ -1037,6 +1043,7 @@ nm_supplicant_config_add_setting_8021x (NMSupplicantConfig *self,
 			                              nm_setting_802_1x_get_phase2_ca_cert_uri (setting),
 			                              nm_setting_802_1x_get_phase2_private_key_password (setting),
 			                              nm_setting_802_1x_get_phase2_private_key_password_flags (setting),
+						      subject,
 						      error)) {
 				return FALSE;
 			}
@@ -1088,6 +1095,7 @@ nm_supplicant_config_add_setting_8021x (NMSupplicantConfig *self,
 		                              nm_setting_802_1x_get_private_key_uri (setting),
 		                              nm_setting_802_1x_get_phase2_private_key_password (setting),
 		                              nm_setting_802_1x_get_phase2_private_key_password_flags (setting),
+					      subject,
 					      error)) {
 			return FALSE;
 		}
@@ -1135,6 +1143,7 @@ nm_supplicant_config_add_setting_8021x (NMSupplicantConfig *self,
 				                              nm_setting_802_1x_get_client_cert_uri (setting),
 				                              nm_setting_802_1x_get_private_key_password (setting),
 				                              nm_setting_802_1x_get_private_key_password_flags (setting),
+							      subject,
 							      error)) {
 					return FALSE;
 				}
@@ -1165,6 +1174,7 @@ nm_supplicant_config_add_setting_8021x (NMSupplicantConfig *self,
 		                              nm_setting_802_1x_get_phase2_private_key_uri (setting),
 		                              nm_setting_802_1x_get_phase2_private_key_password (setting),
 		                              nm_setting_802_1x_get_phase2_private_key_password_flags (setting),
+					      subject,
 					      error)) {
 			return FALSE;
 		}
@@ -1212,6 +1222,7 @@ nm_supplicant_config_add_setting_8021x (NMSupplicantConfig *self,
 				                              nm_setting_802_1x_get_phase2_client_cert_uri (setting),
 				                              nm_setting_802_1x_get_phase2_private_key_password (setting),
 				                              nm_setting_802_1x_get_phase2_private_key_password_flags (setting),
+							      subject,
 							      error)) {
 					return FALSE;
 				}

@@ -278,6 +278,7 @@ test_wifi_wep_key (const char *detail,
 	                                                              NULL,
 	                                                              "376aced7-b28c-46be-9a62-fcdf072571da",
 	                                                              1500,
+	                                                              NULL,
 	                                                              &error));
 	g_assert_no_error (error);
 	g_test_assert_expected_messages ();
@@ -425,6 +426,7 @@ test_wifi_wpa_psk (const char *detail,
 	                                                              NULL,
 	                                                              "376aced7-b28c-46be-9a62-fcdf072571da",
 	                                                              1500,
+	                                                              NULL,
 	                                                              &error));
 	g_assert_no_error (error);
 	g_test_assert_expected_messages ();
@@ -580,6 +582,7 @@ test_wifi_eap (void)
 	                                                              s_8021x,
 	                                                              "d5b488af-9cab-41ed-bad4-97709c58430f",
 	                                                              mtu,
+	                                                              NULL,
 	                                                              &error));
 	g_assert_no_error (error);
 	g_test_assert_expected_messages ();

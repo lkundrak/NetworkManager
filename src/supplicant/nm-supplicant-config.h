@@ -59,6 +59,7 @@ gboolean nm_supplicant_config_add_setting_wireless_security (NMSupplicantConfig 
                                                              NMSetting8021x *setting_8021x,
                                                              const char *con_uuid,
                                                              guint32 mtu,
+                                                             NMAuthSubject *subject,
                                                              GError **error);
 
 gboolean nm_supplicant_config_add_no_security (NMSupplicantConfig *self,
@@ -69,6 +70,7 @@ gboolean nm_supplicant_config_add_setting_8021x (NMSupplicantConfig *self,
                                                  const char *con_uuid,
                                                  guint32 mtu,
                                                  gboolean wired,
+                                                 NMAuthSubject *subject,
                                                  GError **error);
 
 #endif /* __NETWORKMANAGER_SUPPLICANT_CONFIG_H__ */

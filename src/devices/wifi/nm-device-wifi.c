@@ -2336,6 +2336,7 @@ static NMSupplicantConfig *
 build_supplicant_config (NMDeviceWifi *self,
                          NMConnection *connection,
                          guint32 fixed_freq,
+                         NMAuthSubject *subject,
                          GError **error)
 {
 	NMDeviceWifiPrivate *priv = NM_DEVICE_WIFI_GET_PRIVATE (self);
@@ -2378,6 +2379,7 @@ build_supplicant_config (NMDeviceWifi *self,
 		                                                         s_8021x,
 		                                                         con_uuid,
 		                                                         mtu,
+		                                                         subject,
 		                                                         error)) {
 			g_prefix_error (error, "802-11-wireless-security: ");
 			goto error;
@@ -2623,7 +2625,9 @@ act_stage2_config (NMDevice *device, NMDeviceStateReason *reason)
 		set_powersave (device);
 
 	/* Build up the supplicant configuration */
-	config = build_supplicant_config (self, connection, nm_wifi_ap_get_freq (ap), &error);
+	config = build_supplicant_config (self, connection, nm_wifi_ap_get_freq (ap),
+	                                  nm_active_connection_get_subject (NM_ACTIVE_CONNECTION (req)),
+	                                  &error);
 	if (config == NULL) {
 		_LOGE (LOGD_DEVICE | LOGD_WIFI,
 		       "Activation: (wifi) couldn't build wireless configuration: %s",
