@@ -767,6 +767,7 @@ add_pkcs11_uri_with_pin (NMSupplicantConfig *self,
 	gs_strfreev gchar **split;
 	gs_free char *tmp, *tmp_log = NULL;
 	gs_free char *pin_qattr = NULL;
+	gs_free char *sock_qattr = NULL;
 	char *escaped = NULL;
 
 	if (uri == NULL)
@@ -791,13 +792,31 @@ add_pkcs11_uri_with_pin (NMSupplicantConfig *self,
 		pin_qattr = g_strdup ("pin-value=");
 	}
 
-	tmp = g_strdup_printf ("%s%s%s", split[0],
-	                       (pin_qattr ? "&" : ""),
-	                       (pin_qattr ? pin_qattr : ""));
+	if (nm_auth_subject_is_unix_process (subject)) {
+		/* XXX: This is probably a sin: 'User code should not reference this
+		 * directory directly' -- file-hierarchy(7) */
+		char *socket = g_strdup_printf ("/run/user/%lu/p11-kit-remote",
+		                                nm_auth_subject_get_unix_process_uid (subject));
 
-	tmp_log = g_strdup_printf ("%s%s%s", split[0],
+		if (access (socket, R_OK | W_OK) == 0) {
+			escaped = g_uri_escape_string (socket, "/", TRUE);
+			sock_qattr = g_strdup_printf ("p11-kit-remote=unix:path%%3d%s", escaped);
+			g_free (escaped);
+		}
+		g_free (socket);
+	}
+
+	tmp = g_strdup_printf ("%s%s%s%s%s", split[0],
+	                       (pin_qattr ? "&" : ""),
+	                       (pin_qattr ? pin_qattr : ""),
+	                       (sock_qattr ? (pin_qattr ? ";" : "&") : ""),
+	                       (sock_qattr ? sock_qattr : ""));
+
+	tmp_log = g_strdup_printf ("%s%s%s%s%s", split[0],
 	                           (pin_qattr ? "&" : ""),
-	                           (pin_qattr ? "pin-value=<hidden>" : ""));
+	                           (pin_qattr ? "pin-value=<hidden>" : ""),
+	                           (sock_qattr ? (pin_qattr ? ";" : "&") : ""),
+	                           (sock_qattr ? sock_qattr : ""));
 
 	return add_string_val (self, tmp, name, FALSE, tmp_log, error);
 }
