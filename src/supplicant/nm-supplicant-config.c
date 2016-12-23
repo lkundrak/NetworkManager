@@ -807,13 +807,13 @@ add_pkcs11_uri_with_pin (NMSupplicantConfig *self,
 	}
 
 	tmp = g_strdup_printf ("%s%s%s%s%s", split[0],
-	                       (pin_qattr ? "&" : ""),
+	                       (pin_qattr ? ";" : ""),
 	                       (pin_qattr ? pin_qattr : ""),
 	                       (sock_qattr ? (pin_qattr ? ";" : "&") : ""),
 	                       (sock_qattr ? sock_qattr : ""));
 
 	tmp_log = g_strdup_printf ("%s%s%s%s%s", split[0],
-	                           (pin_qattr ? "&" : ""),
+	                           (pin_qattr ? ";" : ""),
 	                           (pin_qattr ? "pin-value=<hidden>" : ""),
 	                           (sock_qattr ? (pin_qattr ? ";" : "&") : ""),
 	                           (sock_qattr ? sock_qattr : ""));
