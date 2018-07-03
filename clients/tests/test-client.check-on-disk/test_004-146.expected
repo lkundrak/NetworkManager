@@ -2,7 +2,7 @@ location: clients/tests/test-client.py:984:test_004()/146
 cmd: $NMCLI --terse --color yes -f ALL device show wlan0
 lang: pl_PL.UTF-8
 returncode: 0
-stdout: 2726 bytes
+stdout: 2802 bytes
 >>>
 GENERAL.DEVICE:wlan0
 GENERAL.TYPE:wifi
@@ -15,6 +15,8 @@ GENERAL.FIRMWARE-VERSION:
 GENERAL.HWADDR:13:E0:74:85:7C:D9
 GENERAL.MTU:0
 GENERAL.STATE:20 (niedostępne)
+GENERAL.IP4-CONNECTIVITY:0 (nieznane)
+GENERAL.IP6-CONNECTIVITY:0 (nieznane)
 GENERAL.REASON:0 (Nie podano przyczyny)
 GENERAL.UDI:/sys/devices/virtual/wlan0
 GENERAL.IP-IFACE:

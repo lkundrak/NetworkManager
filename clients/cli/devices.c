@@ -40,13 +40,15 @@
 #define PROMPT_INTERFACES _("Interface(s): ")
 
 const NmcMetaGenericInfo *const nmc_fields_dev_status[] = {
-	NMC_META_GENERIC ("DEVICE"),       /* 0 */
-	NMC_META_GENERIC ("TYPE"),         /* 1 */
-	NMC_META_GENERIC ("STATE"),        /* 2 */
-	NMC_META_GENERIC ("DBUS-PATH"),    /* 3 */
-	NMC_META_GENERIC ("CONNECTION"),   /* 4 */
-	NMC_META_GENERIC ("CON-UUID"),     /* 5 */
-	NMC_META_GENERIC ("CON-PATH"),     /* 6 */
+	NMC_META_GENERIC ("DEVICE"),           /* 0 */
+	NMC_META_GENERIC ("TYPE"),             /* 1 */
+	NMC_META_GENERIC ("STATE"),            /* 2 */
+	NMC_META_GENERIC ("IP4-CONNECTIVITY"), /* 3 */
+	NMC_META_GENERIC ("IP6-CONNECTIVITY"), /* 4 */
+	NMC_META_GENERIC ("DBUS-PATH"),        /* 5 */
+	NMC_META_GENERIC ("CONNECTION"),       /* 6 */
+	NMC_META_GENERIC ("CON-UUID"),         /* 7 */
+	NMC_META_GENERIC ("CON-PATH"),         /* 8 */
 	NULL,
 };
 #define NMC_FIELDS_DEV_STATUS_COMMON  "DEVICE,TYPE,STATE,CONNECTION"
@@ -64,19 +66,21 @@ const NmcMetaGenericInfo *const nmc_fields_dev_show_general[] = {
 	NMC_META_GENERIC ("HWADDR"),              /* 9 */
 	NMC_META_GENERIC ("MTU"),                 /* 10 */
 	NMC_META_GENERIC ("STATE"),               /* 11 */
-	NMC_META_GENERIC ("REASON"),              /* 12 */
-	NMC_META_GENERIC ("UDI"),                 /* 13 */
-	NMC_META_GENERIC ("IP-IFACE"),            /* 14 */
-	NMC_META_GENERIC ("IS-SOFTWARE"),         /* 15 */
-	NMC_META_GENERIC ("NM-MANAGED"),          /* 16 */
-	NMC_META_GENERIC ("AUTOCONNECT"),         /* 17 */
-	NMC_META_GENERIC ("FIRMWARE-MISSING"),    /* 18 */
-	NMC_META_GENERIC ("NM-PLUGIN-MISSING"),   /* 19 */
-	NMC_META_GENERIC ("PHYS-PORT-ID"),        /* 20 */
-	NMC_META_GENERIC ("CONNECTION"),          /* 21 */
-	NMC_META_GENERIC ("CON-UUID"),            /* 22 */
-	NMC_META_GENERIC ("CON-PATH"),            /* 23 */
-	NMC_META_GENERIC ("METERED"),             /* 24 */
+	NMC_META_GENERIC ("IP4-CONNECTIVITY"),    /* 12 */
+	NMC_META_GENERIC ("IP6-CONNECTIVITY"),    /* 13 */
+	NMC_META_GENERIC ("REASON"),              /* 14 */
+	NMC_META_GENERIC ("UDI"),                 /* 15 */
+	NMC_META_GENERIC ("IP-IFACE"),            /* 16 */
+	NMC_META_GENERIC ("IS-SOFTWARE"),         /* 17 */
+	NMC_META_GENERIC ("NM-MANAGED"),          /* 18 */
+	NMC_META_GENERIC ("AUTOCONNECT"),         /* 19 */
+	NMC_META_GENERIC ("FIRMWARE-MISSING"),    /* 20 */
+	NMC_META_GENERIC ("NM-PLUGIN-MISSING"),   /* 21 */
+	NMC_META_GENERIC ("PHYS-PORT-ID"),        /* 22 */
+	NMC_META_GENERIC ("CONNECTION"),          /* 23 */
+	NMC_META_GENERIC ("CON-UUID"),            /* 24 */
+	NMC_META_GENERIC ("CON-PATH"),            /* 25 */
+	NMC_META_GENERIC ("METERED"),             /* 26 */
 	NULL,
 };
 #define NMC_FIELDS_DEV_SHOW_GENERAL_COMMON  "NAME,DEVICE,TYPE,VENDOR,PRODUCT,DRIVER,HWADDR,STATE"
@@ -1068,6 +1072,7 @@ show_device_info (NMDevice *device, NmCli *nmc)
 	NMActiveConnection *acon;
 	guint32 speed;
 	char *speed_str, *state_str, *reason_str, *mtu_str;
+	char *ip4_connectivity_str, *ip6_connectivity_str;
 	GArray *sections_array;
 	int k;
 	const char *fields_str = NULL;
@@ -1139,6 +1144,10 @@ show_device_info (NMDevice *device, NmCli *nmc)
 			arr = nmc_dup_fields_array (tmpl, NMC_OF_FLAG_FIELD_NAMES);
 			g_ptr_array_add (out.output_data, arr);
 
+			ip4_connectivity_str = g_strdup_printf ("%d (%s)", nm_device_get_connectivity (device, AF_INET),
+			                                        nm_connectivity_to_string (nm_device_get_connectivity (device, AF_INET)));
+			ip6_connectivity_str = g_strdup_printf ("%d (%s)", nm_device_get_connectivity (device, AF_INET6),
+			                                        nm_connectivity_to_string (nm_device_get_connectivity (device, AF_INET6)));
 			state_str = g_strdup_printf ("%d (%s)", state, nmc_device_state_to_string (state));
 			reason_str = g_strdup_printf ("%d (%s)", reason, nmc_device_reason_to_string (reason));
 			hwaddr = nm_device_get_hw_address (device);
@@ -1158,19 +1167,21 @@ show_device_info (NMDevice *device, NmCli *nmc)
 			set_val_strc (arr, 9, hwaddr ?: _("(unknown)"));
 			set_val_str  (arr, 10, mtu_str);
 			set_val_str  (arr, 11, state_str);
-			set_val_str  (arr, 12, reason_str);
-			set_val_strc (arr, 13, nm_device_get_udi (device));
-			set_val_strc (arr, 14, nm_device_get_ip_iface (device));
-			set_val_strc (arr, 15, nm_device_is_software (device) ? _("yes") : _("no"));
-			set_val_strc (arr, 16, nm_device_get_managed (device) ? _("yes") : _("no"));
-			set_val_strc (arr, 17, nm_device_get_autoconnect (device) ? _("yes") : _("no"));
-			set_val_strc (arr, 18, nm_device_get_firmware_missing (device) ? _("yes") : _("no"));
-			set_val_strc (arr, 19, nm_device_get_nm_plugin_missing (device) ? _("yes") : _("no"));
-			set_val_strc (arr, 20, nm_device_get_physical_port_id (device));
-			set_val_strc (arr, 21, get_active_connection_id (device));
-			set_val_strc (arr, 22, acon ? nm_active_connection_get_uuid (acon) : NULL);
-			set_val_strc (arr, 23, acon ? nm_object_get_path (NM_OBJECT (acon)) : NULL);
-			set_val_strc (arr, 24, nmc_device_metered_to_string (nm_device_get_metered (device)));
+			set_val_str  (arr, 12, ip4_connectivity_str);
+			set_val_str  (arr, 13, ip6_connectivity_str);
+			set_val_str  (arr, 14, reason_str);
+			set_val_strc (arr, 15, nm_device_get_udi (device));
+			set_val_strc (arr, 16, nm_device_get_ip_iface (device));
+			set_val_strc (arr, 17, nm_device_is_software (device) ? _("yes") : _("no"));
+			set_val_strc (arr, 18, nm_device_get_managed (device) ? _("yes") : _("no"));
+			set_val_strc (arr, 19, nm_device_get_autoconnect (device) ? _("yes") : _("no"));
+			set_val_strc (arr, 20, nm_device_get_firmware_missing (device) ? _("yes") : _("no"));
+			set_val_strc (arr, 21, nm_device_get_nm_plugin_missing (device) ? _("yes") : _("no"));
+			set_val_strc (arr, 22, nm_device_get_physical_port_id (device));
+			set_val_strc (arr, 23, get_active_connection_id (device));
+			set_val_strc (arr, 24, acon ? nm_active_connection_get_uuid (acon) : NULL);
+			set_val_strc (arr, 25, acon ? nm_object_get_path (NM_OBJECT (acon)) : NULL);
+			set_val_strc (arr, 26, nmc_device_metered_to_string (nm_device_get_metered (device)));
 			g_ptr_array_add (out.output_data, arr);
 
 			print_data_prepare_width (out.output_data);
@@ -1492,10 +1503,12 @@ fill_output_device_status (NMDevice *device, GPtrArray *output_data)
 	set_val_strc (arr, 0, nm_device_get_iface (device));
 	set_val_strc (arr, 1, nm_device_get_type_description (device));
 	set_val_strc (arr, 2, nmc_device_state_to_string (state));
-	set_val_strc (arr, 3, nm_object_get_path (NM_OBJECT (device)));
-	set_val_strc (arr, 4, get_active_connection_id (device));
-	set_val_strc (arr, 5, ac ? nm_active_connection_get_uuid (ac) : NULL);
-	set_val_strc (arr, 6, ac ? nm_object_get_path (NM_OBJECT (ac)) : NULL);
+	set_val_strc (arr, 3, nm_connectivity_to_string (nm_device_get_connectivity (device, AF_INET)));
+	set_val_strc (arr, 4, nm_connectivity_to_string (nm_device_get_connectivity (device, AF_INET6)));
+	set_val_strc (arr, 5, nm_object_get_path (NM_OBJECT (device)));
+	set_val_strc (arr, 6, get_active_connection_id (device));
+	set_val_strc (arr, 7, ac ? nm_active_connection_get_uuid (ac) : NULL);
+	set_val_strc (arr, 8, ac ? nm_object_get_path (NM_OBJECT (ac)) : NULL);
 
 	g_ptr_array_add (output_data, arr);
 }

@@ -2,7 +2,7 @@ location: clients/tests/test-client.py:887:test_003()/255
 cmd: $NMCLI --color yes -f all dev show eth0
 lang: C
 returncode: 0
-stdout: 3207 bytes
+stdout: 3311 bytes
 >>>
 GENERAL.DEVICE:                         eth0
 GENERAL.TYPE:                           ethernet
@@ -15,6 +15,8 @@ GENERAL.FIRMWARE-VERSION:               --
 GENERAL.HWADDR:                         C0:61:AE:26:4D:D7
 GENERAL.MTU:                            0
 GENERAL.STATE:                          20 (unavailable)
+GENERAL.IP4-CONNECTIVITY:               0 (unknown)
+GENERAL.IP6-CONNECTIVITY:               0 (unknown)
 GENERAL.REASON:                         0 (No reason given)
 GENERAL.UDI:                            /sys/devices/virtual/eth0
 GENERAL.IP-IFACE:                       --
