@@ -3244,6 +3244,15 @@ $(src_tests_test_general_with_expect_OBJECTS): $(libnm_core_lib_h_pub_mkenums)
 $(src_tests_test_wired_defname_OBJECTS): $(libnm_core_lib_h_pub_mkenums)
 $(src_tests_test_utils_OBJECTS): $(libnm_core_lib_h_pub_mkenums)
 
+check_programs_norun += \
+	src/tests/concheck
+
+src_tests_concheck_CPPFLAGS = $(src_tests_cppflags)
+src_tests_concheck_LDFLAGS = $(src_tests_ldflags)
+src_tests_concheck_LDADD = $(src_tests_ldadd)
+
+$(src_tests_concheck_OBJECTS): $(libnm_core_lib_h_pub_mkenums)
+
 src_tests_test_systemd_CPPFLAGS = \
 	$(src_libsystemd_nm_la_cppflags) \
 	-DNETWORKMANAGER_COMPILATION_TEST
