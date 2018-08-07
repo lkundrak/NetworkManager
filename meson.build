@@ -898,7 +898,6 @@ config_extra_h.set_quoted('PPPD_PLUGIN_DIR',   pppd_plugin_dir)
 config_extra_h.set_quoted('PREFIX',            nm_prefix)
 config_extra_h.set_quoted('RUNDIR',            nm_pkgrundir)
 config_extra_h.set_quoted('RUNSTATEDIR',       nm_runstatedir)
-config_extra_h.set_quoted('SBINDIR',           nm_sbindir)
 config_extra_h.set_quoted('SYSCONFDIR',        nm_sysconfdir)
 
 configure_file(
