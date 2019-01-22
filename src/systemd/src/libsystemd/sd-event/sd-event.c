@@ -3133,26 +3133,26 @@ _public_ int sd_event_wait(sd_event *e, uint64_t timeout) {
                 if (ev_queue[i].data.ptr == INT_TO_PTR(SOURCE_WATCHDOG))
                         r = flush_timer(e, e->watchdog_fd, ev_queue[i].events, NULL);
                 else {
-                        WakeupType *t = ev_queue[i].data.ptr;
+                        WakeupType *t = ((epoll_data_t)ev_queue[i].data).ptr;
 
                         switch (*t) {
 
                         case WAKEUP_EVENT_SOURCE:
-                                r = process_io(e, ev_queue[i].data.ptr, ev_queue[i].events);
+                                r = process_io(e, ((epoll_data_t)ev_queue[i].data).ptr, ev_queue[i].events);
                                 break;
 
                         case WAKEUP_CLOCK_DATA: {
-                                struct clock_data *d = ev_queue[i].data.ptr;
+                                struct clock_data *d = ((epoll_data_t)ev_queue[i].data).ptr;
                                 r = flush_timer(e, d->fd, ev_queue[i].events, &d->next);
                                 break;
                         }
 
                         case WAKEUP_SIGNAL_DATA:
-                                r = process_signal(e, ev_queue[i].data.ptr, ev_queue[i].events);
+                                r = process_signal(e, ((epoll_data_t)ev_queue[i].data).ptr, ev_queue[i].events);
                                 break;
 
                         case WAKEUP_INOTIFY_DATA:
-                                r = event_inotify_data_read(e, ev_queue[i].data.ptr, ev_queue[i].events);
+                                r = event_inotify_data_read(e, ((epoll_data_t)ev_queue[i].data).ptr, ev_queue[i].events);
                                 break;
 
                         default:

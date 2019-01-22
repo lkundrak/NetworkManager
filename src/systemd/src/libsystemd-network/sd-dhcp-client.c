@@ -775,14 +775,16 @@ static int dhcp_client_send_raw(
 
 static int client_send_discover(sd_dhcp_client *client) {
         _cleanup_free_ DHCPPacket *discover = NULL;
+        void *discover_ptr = NULL;
         size_t optoffset, optlen;
         int r;
 
         assert(client);
         assert(IN_SET(client->state, DHCP_STATE_INIT, DHCP_STATE_SELECTING));
 
-        r = client_message_init(client, &discover, DHCP_DISCOVER,
+        r = client_message_init(client, (DHCPPacket **)&discover_ptr, DHCP_DISCOVER,
                                 &optlen, &optoffset);
+        discover = discover_ptr;
         if (r < 0)
                 return r;
 
@@ -857,12 +859,14 @@ static int client_send_discover(sd_dhcp_client *client) {
 
 static int client_send_request(sd_dhcp_client *client) {
         _cleanup_free_ DHCPPacket *request = NULL;
+        void *request_ptr = NULL;
         size_t optoffset, optlen;
         int r;
 
         assert(client);
 
-        r = client_message_init(client, &request, DHCP_REQUEST, &optlen, &optoffset);
+        r = client_message_init(client, (DHCPPacket **)&request_ptr, DHCP_REQUEST, &optlen, &optoffset);
+        request = request_ptr;
         if (r < 0)
                 return r;
 
