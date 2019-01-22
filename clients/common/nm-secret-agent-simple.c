@@ -306,7 +306,7 @@ add_wireless_secrets (NMSecretAgentSimpleRequest *request,
 	if (!key_mgmt)
 		return FALSE;
 
-	if (!strcmp (key_mgmt, "wpa-none") || !strcmp (key_mgmt, "wpa-psk")) {
+	if (!strcmp (key_mgmt, "wpa-none") || !strcmp (key_mgmt, "wpa-psk") || !strcmp (key_mgmt, "sae")) {
 		secret = nm_secret_agent_simple_secret_new (NM_SECRET_AGENT_SECRET_TYPE_SECRET,
 		                                            _("Password"),
 		                                            NM_SETTING (s_wsec),
