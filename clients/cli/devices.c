@@ -68,6 +68,8 @@ ap_wpa_rsn_flags_to_string (NM80211ApSecurityFlags flags)
 		flags_str[i++] = g_strdup ("psk");
 	if (flags & NM_802_11_AP_SEC_KEY_MGMT_802_1X)
 		flags_str[i++] = g_strdup ("802.1X");
+	if (flags & NM_802_11_AP_SEC_KEY_MGMT_SAE)
+		flags_str[i++] = g_strdup ("sae");
 
 	if (i == 0)
 		flags_str[i++] = g_strdup (_("(none)"));
