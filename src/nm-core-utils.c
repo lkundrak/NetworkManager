@@ -3427,6 +3427,7 @@ _hw_addr_eth_complete (struct ether_addr *addr,
 	struct ether_addr mask;
 	struct ether_addr oui;
 	struct ether_addr *ouis;
+	void *ouis_ptr;
 	gsize ouis_len;
 	guint i;
 
@@ -3442,10 +3443,11 @@ _hw_addr_eth_complete (struct ether_addr *addr,
 		goto out;
 	if (!_nm_utils_generate_mac_address_mask_parse (generate_mac_address_mask,
 	                                                &mask,
-	                                                &ouis,
+	                                                (struct ether_addr **)&ouis_ptr,
 	                                                &ouis_len,
 	                                                NULL))
 		goto out;
+	ouis = ouis_ptr;
 
 	nm_assert ((ouis == NULL) ^ (ouis_len != 0));
 	if (ouis) {
