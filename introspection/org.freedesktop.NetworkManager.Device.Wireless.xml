@@ -135,5 +135,12 @@
     <signal name="AccessPointRemoved">
       <arg name="access_point" type="o"/>
     </signal>
+
+    <!--
+	ScanDone:
+
+        Emitted when the device has finished scanning for new APs.
+    -->
+    <signal name="ScanDone"/>
   </interface>
 </node>

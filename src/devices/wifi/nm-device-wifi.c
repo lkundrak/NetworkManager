@@ -79,6 +79,7 @@ NM_GOBJECT_PROPERTIES_DEFINE (NMDeviceWifi,
 
 enum {
 	SCANNING_PROHIBITED,
+	SCAN_DONE,
 
 	LAST_SIGNAL
 };
@@ -138,6 +139,7 @@ struct _NMDeviceWifiClass
 
 	/* Signals */
 	gboolean (*scanning_prohibited) (NMDeviceWifi *device, gboolean periodic);
+	void (*scan_done) (NMDeviceWifi *device);
 };
 
 /*****************************************************************************/
@@ -1415,6 +1417,7 @@ supplicant_iface_scan_done_cb (NMSupplicantInterface *iface,
 
 	priv->last_scan = nm_utils_get_monotonic_timestamp_ms ();
 	_notify (self, PROP_LAST_SCAN);
+	g_signal_emit (self, signals[SCAN_DONE], 0, NULL);
 	schedule_scan (self, success);
 
 	_requested_scan_set (self, FALSE);
@@ -3358,4 +3361,12 @@ nm_device_wifi_class_init (NMDeviceWifiClass *klass)
 	                  G_STRUCT_OFFSET (NMDeviceWifiClass, scanning_prohibited),
 	                  NULL, NULL, NULL,
 	                  G_TYPE_BOOLEAN, 1, G_TYPE_BOOLEAN);
+
+	signals[SCAN_DONE] =
+	    g_signal_new ("scan-done",
+	                  G_OBJECT_CLASS_TYPE (object_class),
+	                  G_SIGNAL_RUN_FIRST,
+	                  G_STRUCT_OFFSET (NMDeviceWifiClass, scan_done),
+	                  NULL, NULL, NULL,
+	                  G_TYPE_NONE, 0);
 }
