@@ -45,7 +45,7 @@ typedef struct {
 #define NM_IS_OVS_FACTORY_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), NM_TYPE_OVS_FACTORY))
 #define NM_OVS_FACTORY_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), NM_TYPE_OVS_FACTORY, NMOvsFactoryClass))
 
-static GType nm_ovs_factory_get_type (void);
+GType nm_ovs_factory_get_type (void);
 G_DEFINE_TYPE (NMOvsFactory, nm_ovs_factory, NM_TYPE_DEVICE_FACTORY)
 
 /*****************************************************************************/
@@ -62,11 +62,13 @@ NM_DEVICE_FACTORY_DECLARE_TYPES (
 	                                         NM_SETTING_OVS_PORT_SETTING_NAME)
 )
 
+#if !WITH_OPENVSWITCH_BUILTIN
 G_MODULE_EXPORT NMDeviceFactory *
 nm_device_factory_create (GError **error)
 {
 	return (NMDeviceFactory *) g_object_new (NM_TYPE_OVS_FACTORY, NULL);
 }
+#endif
 
 static NMDevice *
 new_device_from_type (const char *name, NMDeviceType device_type)

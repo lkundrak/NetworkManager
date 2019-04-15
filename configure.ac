@@ -816,12 +816,23 @@ fi
 
 # Open vSwitch integration
 AC_ARG_ENABLE(ovs, AS_HELP_STRING([--enable-ovs], [enable Open vSwitch support]))
-if test "${enable_ovs}" != "no"; then
+
+if test "${enable_ovs}" == "builtin"; then
+	AC_DEFINE(WITH_OPENVSWITCH_BUILTIN, 1, [Define if Open vSwitch support is built in])
+elif test "${enable_ovs}" != "no"; then
 	enable_ovs='yes'
+	AC_DEFINE(WITH_OPENVSWITCH_BUILTIN, 0, [Define if Open vSwitch support is built in])
+else
+	AC_DEFINE(WITH_OPENVSWITCH_BUILTIN, 0, [Define if Open vSwitch support is built in])
+fi
+
+if test "${enable_ovs}" != "no"; then
 	if test "$have_jansson" = "no"; then
 		AC_MSG_ERROR(Jansson is required for ovs support)
 	fi
 fi
+
+AM_CONDITIONAL(WITH_OPENVSWITCH_BUILTIN, test "${enable_ovs}" = "builtin")
 AM_CONDITIONAL(WITH_OPENVSWITCH, test "${enable_ovs}" = "yes")
 
 # DHCP client support

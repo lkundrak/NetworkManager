@@ -437,6 +437,9 @@ nm_device_factory_manager_load_factories (NMDeviceFactoryManagerFactoryFunc call
 #if WITH_TEAMDCTL_BUILTIN
 	_ADD_INTERNAL (nm_team_factory_get_type);
 #endif
+#if WITH_OPENVSWITCH_BUILTIN
+	_ADD_INTERNAL (nm_ovs_factory_get_type);
+#endif
 
 	load_factories_from_dir (NMPLUGINDIR, callback, user_data);
 }

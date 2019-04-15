@@ -3383,18 +3383,6 @@ EXTRA_DIST += \
 # src/devices/ovs
 ###############################################################################
 
-if WITH_OPENVSWITCH
-
-if HAVE_SYSTEMD
-
-systemdnmunitdir = $(systemdsystemunitdir)/NetworkManager.service.d
-systemdnmunit_DATA = \
-	data/NetworkManager-ovs.conf
-
-endif
-
-core_plugins += src/devices/ovs/libnm-device-plugin-ovs.la
-
 src_devices_ovs_libnm_device_plugin_ovs_la_SOURCES = \
 	src/devices/ovs/nm-ovsdb.c \
 	src/devices/ovs/nm-ovsdb.h \
@@ -3411,13 +3399,42 @@ src_devices_ovs_libnm_device_plugin_ovs_la_CPPFLAGS = \
 	$(JANSSON_CFLAGS) \
 	$(NULL)
 
-src_devices_ovs_libnm_device_plugin_ovs_la_LDFLAGS = \
-	-module -avoid-version \
-	-Wl,--version-script="$(srcdir)/linker-script-devices.ver"
-
 src_devices_ovs_libnm_device_plugin_ovs_la_LIBADD = \
 	$(JANSSON_LIBS) \
 	$(GLIB_LIBS)
+
+if WITH_OPENVSWITCH_BUILTIN
+
+src_libNetworkManager_la_SOURCES += \
+	$(src_devices_ovs_libnm_device_plugin_ovs_la_SOURCES)
+
+src_libNetworkManager_la_CPPFLAGS += \
+	$(src_devices_ovs_libnm_device_plugin_ovs_la_CPPFLAGS)
+
+src_libNetworkManager_la_LIBADD += \
+	$(src_devices_ovs_libnm_device_plugin_ovs_la_LIBADD)
+
+endif
+
+if WITH_OPENVSWITCH
+
+if HAVE_SYSTEMD
+
+systemdnmunitdir = $(systemdsystemunitdir)/NetworkManager.service.d
+systemdnmunit_DATA = \
+	data/NetworkManager-ovs.conf
+
+endif
+
+endif # WITH_OPENVSWITCH || WITH_OPENVSWITCH_BUILTIN
+
+if WITH_OPENVSWITCH
+
+core_plugins += src/devices/ovs/libnm-device-plugin-ovs.la
+
+src_devices_ovs_libnm_device_plugin_ovs_la_LDFLAGS = \
+	-module -avoid-version \
+	-Wl,--version-script="$(srcdir)/linker-script-devices.ver"
 
 check-local-devices-ovs: src/devices/ovs/libnm-device-plugin-ovs.la
 	$(srcdir)/tools/check-exports.sh $(builddir)/src/devices/ovs/.libs/libnm-device-plugin-ovs.so "$(srcdir)/linker-script-devices.ver"
