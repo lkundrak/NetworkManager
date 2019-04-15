@@ -588,7 +588,17 @@ fi
 AC_ARG_ENABLE(teamdctl,
               AS_HELP_STRING([--enable-teamdctl], [enable Teamd control support]),
               [enable_teamdctl=${enableval}], [enable_teamdctl=${have_team_prereq}])
-if (test "${enable_teamdctl}" = "yes"); then
+
+if test "${enable_teamdctl}" == "builtin"; then
+	AC_DEFINE(WITH_TEAMDCTL_BUILTIN, 1, [Define if Team control is built in])
+elif test "${enable_teamdctl}" != "no"; then
+	enable_teamdctl='yes'
+	AC_DEFINE(WITH_TEAMDCTL_BUILTIN, 0, [Define if Team control is built in])
+else
+	AC_DEFINE(WITH_TEAMDCTL_BUILTIN, 0, [Define if Team control is built in])
+fi
+
+if test "${enable_teamdctl}" != "no"; then
 	if test "$have_teamdctl" = "no"; then
 		AC_MSG_ERROR(Libteamdctl is required for team support)
 	fi
@@ -598,6 +608,8 @@ if (test "${enable_teamdctl}" = "yes"); then
 	# temporary bug workaround
 	LIBTEAMDCTL_CFLAGS=`echo $LIBTEAMDCTL_CFLAGS | sed -e 's:/teamdctl.h::'`
 fi
+
+AM_CONDITIONAL(WITH_TEAMDCTL_BUILTIN, test "${enable_teamdctl}" = "builtin")
 AM_CONDITIONAL(WITH_TEAMDCTL, test "${enable_teamdctl}" = "yes")
 
 # Jansson for team configuration validation

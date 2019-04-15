@@ -45,7 +45,7 @@ typedef struct {
 	NMDeviceFactoryClass parent;
 } NMTeamFactoryClass;
 
-static GType nm_team_factory_get_type (void);
+GType nm_team_factory_get_type (void);
 
 G_DEFINE_TYPE (NMTeamFactory, nm_team_factory, NM_TYPE_DEVICE_FACTORY)
 
@@ -56,12 +56,14 @@ NM_DEVICE_FACTORY_DECLARE_TYPES (
 	NM_DEVICE_FACTORY_DECLARE_SETTING_TYPES (NM_SETTING_TEAM_SETTING_NAME)
 )
 
+#if !WITH_TEAMDCTL_BUILTIN
 G_MODULE_EXPORT NMDeviceFactory *
 nm_device_factory_create (GError **error)
 {
 	nm_manager_set_capability (nm_manager_get (), NM_CAPABILITY_TEAM);
 	return (NMDeviceFactory *) g_object_new (NM_TYPE_TEAM_FACTORY, NULL);
 }
+#endif
 
 /*****************************************************************************/
 

@@ -3331,10 +3331,6 @@ EXTRA_DIST += \
 # src/devices/team
 ###############################################################################
 
-if WITH_TEAMDCTL
-
-core_plugins += src/devices/team/libnm-device-plugin-team.la
-
 src_devices_team_libnm_device_plugin_team_la_SOURCES = \
 	src/devices/team/nm-team-factory.c \
 	src/devices/team/nm-device-team.c \
@@ -3346,14 +3342,31 @@ src_devices_team_libnm_device_plugin_team_la_CPPFLAGS = \
 	$(JANSSON_CFLAGS) \
 	$(NULL)
 
-src_devices_team_libnm_device_plugin_team_la_LDFLAGS = \
-	-module -avoid-version \
-	-Wl,--version-script="$(srcdir)/linker-script-devices.ver"
-
 src_devices_team_libnm_device_plugin_team_la_LIBADD = \
 	$(LIBTEAMDCTL_LIBS) \
 	$(JANSSON_LIBS) \
 	$(GLIB_LIBS)
+
+if WITH_TEAMDCTL_BUILTIN
+
+src_libNetworkManager_la_SOURCES += \
+	$(src_devices_team_libnm_device_plugin_team_la_SOURCES)
+
+src_libNetworkManager_la_CPPFLAGS += \
+	$(src_devices_team_libnm_device_plugin_team_la_CPPFLAGS)
+
+src_libNetworkManager_la_LIBADD += \
+	$(src_devices_team_libnm_device_plugin_team_la_LIBADD)
+
+endif
+
+if WITH_TEAMDCTL
+
+core_plugins += src/devices/team/libnm-device-plugin-team.la
+
+src_devices_team_libnm_device_plugin_team_la_LDFLAGS = \
+	-module -avoid-version \
+	-Wl,--version-script="$(srcdir)/linker-script-devices.ver"
 
 check-local-devices-team: src/devices/team/libnm-device-plugin-team.la
 	$(srcdir)/tools/check-exports.sh $(builddir)/src/devices/team/.libs/libnm-device-plugin-team.so "$(srcdir)/linker-script-devices.ver"
