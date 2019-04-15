@@ -3254,10 +3254,6 @@ EXTRA_DIST += \
 # src/devices/wifi
 ###############################################################################
 
-if WITH_WIFI
-
-core_plugins += src/devices/wifi/libnm-device-plugin-wifi.la
-
 src_devices_wifi_libnm_device_plugin_wifi_la_SOURCES = \
 	src/devices/wifi/nm-device-olpc-mesh.c \
 	src/devices/wifi/nm-device-olpc-mesh.h \
@@ -3284,6 +3280,15 @@ src_devices_wifi_libnm_device_plugin_wifi_la_SOURCES += \
 	src/devices/wifi/nm-iwd-manager.h \
 	$(NULL)
 endif
+
+if WITH_WIFI_BUILTIN
+src_libNetworkManager_la_SOURCES += \
+	$(src_devices_wifi_libnm_device_plugin_wifi_la_SOURCES)
+endif
+
+if WITH_WIFI
+
+core_plugins += src/devices/wifi/libnm-device-plugin-wifi.la
 
 src_devices_wifi_libnm_device_plugin_wifi_la_CPPFLAGS = $(src_cppflags_device_plugin)
 

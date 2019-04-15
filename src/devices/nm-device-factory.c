@@ -431,6 +431,9 @@ nm_device_factory_manager_load_factories (NMDeviceFactoryManagerFactoryFunc call
 	_ADD_INTERNAL (nm_vxlan_device_factory_get_type);
 	_ADD_INTERNAL (nm_wireguard_device_factory_get_type);
 	_ADD_INTERNAL (nm_wpan_device_factory_get_type);
+#if WITH_WIFI_BUILTIN
+	_ADD_INTERNAL (nm_wifi_factory_get_type);
+#endif
 
 	load_factories_from_dir (NMPLUGINDIR, callback, user_data);
 }

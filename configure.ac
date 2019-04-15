@@ -189,10 +189,16 @@ AC_DEFINE_UNQUOTED(NM_DIST_VERSION, "$ac_distver", [Define the distribution vers
 AC_SUBST(NM_DIST_VERSION, "$ac_distver")
 
 AC_ARG_ENABLE(wifi, AS_HELP_STRING([--enable-wifi], [enable Wi-Fi support]))
-if test "${enable_wifi}" != "no"; then
+if test "${enable_wifi}" == "builtin"; then
+	AC_DEFINE(WITH_WIFI_BUILTIN, 1, [Define if Wi-Fi support is built in])
+elif test "${enable_wifi}" != "no"; then
 	enable_wifi='yes'
+	AC_DEFINE(WITH_WIFI_BUILTIN, 0, [Define if Wi-Fi support is built in])
+else
+	AC_DEFINE(WITH_WIFI_BUILTIN, 0, [Define if Wi-Fi support is built in])
 fi
 AM_CONDITIONAL(WITH_WIFI, test "${enable_wifi}" = "yes")
+AM_CONDITIONAL(WITH_WIFI_BUILTIN, test "${enable_wifi}" = "builtin")
 
 dnl
 dnl Default to using WEXT but allow it to be disabled
@@ -205,7 +211,7 @@ if test "$ac_with_wext" != 'no'; then
 	ac_with_wext='yes'
 fi
 if test x"$ac_with_wext" = x"yes"; then
-	if test "$enable_wifi" != "yes"; then
+	if test "$enable_wifi" == "no"; then
 		AC_MSG_ERROR(Enabling WEXT support and disabling Wi-Fi makes no sense)
 	fi
 	AC_DEFINE(HAVE_WEXT, 1, [Define if you have Linux Wireless Extensions support])

@@ -50,7 +50,7 @@ typedef struct {
 	NMDeviceFactoryClass parent;
 } NMWifiFactoryClass;
 
-static GType nm_wifi_factory_get_type (void);
+GType nm_wifi_factory_get_type (void);
 
 G_DEFINE_TYPE (NMWifiFactory, nm_wifi_factory, NM_TYPE_DEVICE_FACTORY)
 
@@ -61,11 +61,13 @@ NM_DEVICE_FACTORY_DECLARE_TYPES (
 	NM_DEVICE_FACTORY_DECLARE_SETTING_TYPES (NM_SETTING_WIRELESS_SETTING_NAME, NM_SETTING_OLPC_MESH_SETTING_NAME)
 )
 
+#if !WITH_WIFI_BUILTIN
 G_MODULE_EXPORT NMDeviceFactory *
 nm_device_factory_create (GError **error)
 {
 	return (NMDeviceFactory *) g_object_new (NM_TYPE_WIFI_FACTORY, NULL);
 }
+#endif
 
 /*****************************************************************************/
 
