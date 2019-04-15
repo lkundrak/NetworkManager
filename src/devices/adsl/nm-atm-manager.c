@@ -52,7 +52,7 @@ typedef struct {
 	NMDeviceFactoryClass parent;
 } NMAtmManagerClass;
 
-static GType nm_atm_manager_get_type (void);
+GType nm_atm_manager_get_type (void);
 
 G_DEFINE_TYPE (NMAtmManager, nm_atm_manager, NM_TYPE_DEVICE_FACTORY);
 

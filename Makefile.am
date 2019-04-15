@@ -3095,27 +3095,42 @@ EXTRA_DIST += \
 # src/devices/adsl
 ###############################################################################
 
-core_plugins += src/devices/adsl/libnm-device-plugin-adsl.la
-
 src_devices_adsl_libnm_device_plugin_adsl_la_SOURCES = \
 	src/devices/adsl/nm-atm-manager.c \
 	src/devices/adsl/nm-device-adsl.c \
 	src/devices/adsl/nm-device-adsl.h
 
+src_devices_adsl_libnm_device_plugin_adsl_la_LIBADD = \
+	$(LIBUDEV_LIBS)
+
 src_devices_adsl_libnm_device_plugin_adsl_la_CPPFLAGS = $(src_cppflags_device_plugin)
+
+if WITH_ADSL_BUILTIN
+
+src_libNetworkManager_la_SOURCES += \
+	$(src_devices_adsl_libnm_device_plugin_adsl_la_SOURCES)
+
+src_libNetworkManager_la_LIBADD += \
+	$(src_devices_adsl_libnm_device_plugin_adsl_la_LIBADD)
+
+src_libNetworkManager_la_CPPFLAGS += \
+	$(src_devices_adsl_libnm_device_plugin_adsl_la_CPPFLAGS)
+
+else
+
+core_plugins += src/devices/adsl/libnm-device-plugin-adsl.la
 
 src_devices_adsl_libnm_device_plugin_adsl_la_LDFLAGS = \
 	-module -avoid-version \
 	-Wl,--version-script="$(srcdir)/linker-script-devices.ver"
-
-src_devices_adsl_libnm_device_plugin_adsl_la_LIBADD = \
-	$(LIBUDEV_LIBS)
 
 check-local-devices-adsl: src/devices/adsl/libnm-device-plugin-adsl.la
 	$(srcdir)/tools/check-exports.sh $(builddir)/src/devices/adsl/.libs/libnm-device-plugin-adsl.so "$(srcdir)/linker-script-devices.ver"
 	$(call check_so_symbols,$(builddir)/src/devices/adsl/.libs/libnm-device-plugin-adsl.so)
 
 check_local += check-local-devices-adsl
+
+endif
 
 EXTRA_DIST += \
 	src/devices/adsl/meson.build

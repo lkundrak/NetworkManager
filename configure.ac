@@ -845,6 +845,17 @@ fi
 AM_CONDITIONAL(WITH_OPENVSWITCH_BUILTIN, test "${enable_ovs}" = "builtin")
 AM_CONDITIONAL(WITH_OPENVSWITCH, test "${enable_ovs}" = "yes")
 
+# ADSL support, always on, optionally built-in
+AC_ARG_ENABLE(adsl)
+if test "${enable_adsl}" == "builtin"; then
+	AC_DEFINE(WITH_ADSL_BUILTIN, 1, [Define if ADSL support is built in])
+elif test "${enable_adsl}" == ""; then
+	AC_DEFINE(WITH_ADSL_BUILTIN, 0, [Define if ADSL support is built in])
+else
+	AC_MSG_ERROR([--enable-adsl=${enable_adsl} is not a valid option])
+fi
+AM_CONDITIONAL(WITH_ADSL_BUILTIN, test "${enable_ovs}" = "builtin")
+
 # DHCP client support
 AC_ARG_WITH([dhclient],
             AS_HELP_STRING([--with-dhclient=yes|no|path], [Enable dhclient support]))

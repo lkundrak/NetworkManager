@@ -444,6 +444,9 @@ nm_device_factory_manager_load_factories (NMDeviceFactoryManagerFactoryFunc call
 	_ADD_INTERNAL (nm_wwan_factory_get_type);
 	_ADD_INTERNAL (nm_bluez_manager_get_type);
 #endif
+#if WITH_ADSL_BUILTIN
+	_ADD_INTERNAL (nm_atm_manager_get_type);
+#endif
 
 	load_factories_from_dir (NMPLUGINDIR, callback, user_data);
 }
