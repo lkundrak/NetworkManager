@@ -68,7 +68,7 @@ typedef struct {
 	NMDeviceFactoryClass parent;
 } NMBluezManagerClass;
 
-static GType nm_bluez_manager_get_type (void);
+GType nm_bluez_manager_get_type (void);
 
 G_DEFINE_TYPE (NMBluezManager, nm_bluez_manager, NM_TYPE_DEVICE_FACTORY);
 
@@ -81,11 +81,13 @@ NM_DEVICE_FACTORY_DECLARE_TYPES (
 	NM_DEVICE_FACTORY_DECLARE_SETTING_TYPES (NM_SETTING_BLUETOOTH_SETTING_NAME)
 )
 
+#if !WITH_MODEM_MANAGER_1_BUILTIN
 G_MODULE_EXPORT NMDeviceFactory *
 nm_device_factory_create (GError **error)
 {
 	return (NMDeviceFactory *) g_object_new (NM_TYPE_BLUEZ_MANAGER, NULL);
 }
+#endif
 
 /*****************************************************************************/
 

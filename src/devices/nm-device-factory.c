@@ -440,6 +440,10 @@ nm_device_factory_manager_load_factories (NMDeviceFactoryManagerFactoryFunc call
 #if WITH_OPENVSWITCH_BUILTIN
 	_ADD_INTERNAL (nm_ovs_factory_get_type);
 #endif
+#if WITH_MODEM_MANAGER_1_BUILTIN
+	_ADD_INTERNAL (nm_wwan_factory_get_type);
+	_ADD_INTERNAL (nm_bluez_manager_get_type);
+#endif
 
 	load_factories_from_dir (NMPLUGINDIR, callback, user_data);
 }

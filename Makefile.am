@@ -3124,14 +3124,10 @@ EXTRA_DIST += \
 # src/devices/wwan
 ###############################################################################
 
-if WITH_MODEM_MANAGER_1
-
 src_devices_wwan_cppflags = \
 	$(src_cppflags_device_plugin) \
 	$(MM_GLIB_CFLAGS) \
 	$(NULL)
-
-core_plugins += src/devices/wwan/libnm-wwan.la
 
 src_devices_wwan_libnm_wwan_la_SOURCES = \
 	src/devices/wwan/nm-modem-broadband.c \
@@ -3147,16 +3143,39 @@ src_devices_wwan_libnm_wwan_la_SOURCES += \
 	src/devices/wwan/nm-modem-ofono.h
 endif
 
+src_devices_wwan_libnm_wwan_la_LIBADD = \
+	$(GLIB_LIBS) \
+	$(LIBSYSTEMD_LIBS) \
+	$(MM_GLIB_LIBS)
+
+src_devices_wwan_libnm_device_plugin_wwan_la_SOURCES = \
+	src/devices/wwan/nm-wwan-factory.c \
+	src/devices/wwan/nm-device-modem.c \
+	src/devices/wwan/nm-device-modem.h
+
+if WITH_MODEM_MANAGER_1_BUILTIN
+
+src_libNetworkManager_la_SOURCES += \
+	$(src_devices_wwan_libnm_wwan_la_SOURCES) \
+	$(src_devices_wwan_libnm_device_plugin_wwan_la_SOURCES)
+
+src_libNetworkManager_la_CPPFLAGS += \
+	$(src_devices_wwan_cppflags)
+
+src_libNetworkManager_la_LIBADD += \
+	$(src_devices_wwan_libnm_wwan_la_LIBADD)
+
+endif
+
+if WITH_MODEM_MANAGER_1
+
 src_devices_wwan_libnm_wwan_la_CPPFLAGS = $(src_devices_wwan_cppflags)
 
 src_devices_wwan_libnm_wwan_la_LDFLAGS = \
 	-avoid-version \
 	-Wl,--version-script="$(srcdir)/src/devices/wwan/libnm-wwan.ver"
 
-src_devices_wwan_libnm_wwan_la_LIBADD = \
-	$(GLIB_LIBS) \
-	$(LIBSYSTEMD_LIBS) \
-	$(MM_GLIB_LIBS)
+core_plugins += src/devices/wwan/libnm-wwan.la
 
 $(src_devices_wwan_libnm_wwan_la_OBJECTS): $(libnm_core_lib_h_pub_mkenums)
 
@@ -3165,20 +3184,15 @@ EXTRA_src_devices_wwan_libnm_wwan_la_DEPENDENCIES = \
 
 core_plugins += src/devices/wwan/libnm-device-plugin-wwan.la
 
-src_devices_wwan_libnm_device_plugin_wwan_la_SOURCES = \
-	src/devices/wwan/nm-wwan-factory.c \
-	src/devices/wwan/nm-device-modem.c \
-	src/devices/wwan/nm-device-modem.h
+src_devices_wwan_libnm_device_plugin_wwan_la_LIBADD = \
+	src/devices/wwan/libnm-wwan.la \
+	$(GLIB_LIBS)
 
 src_devices_wwan_libnm_device_plugin_wwan_la_CPPFLAGS = $(src_devices_wwan_cppflags)
 
 src_devices_wwan_libnm_device_plugin_wwan_la_LDFLAGS = \
 	-module -avoid-version \
 	-Wl,--version-script="$(srcdir)/linker-script-devices.ver"
-
-src_devices_wwan_libnm_device_plugin_wwan_la_LIBADD = \
-	src/devices/wwan/libnm-wwan.la \
-	$(GLIB_LIBS)
 
 check-local-devices-wwan: src/devices/wwan/libnm-device-plugin-wwan.la src/devices/wwan/libnm-wwan.la
 	$(srcdir)/tools/check-exports.sh $(builddir)/src/devices/wwan/.libs/libnm-device-plugin-wwan.so "$(srcdir)/linker-script-devices.ver"
@@ -3197,10 +3211,6 @@ EXTRA_DIST += \
 ###############################################################################
 # src/devices/bluetooth
 ###############################################################################
-
-if WITH_MODEM_MANAGER_1
-
-core_plugins += src/devices/bluetooth/libnm-device-plugin-bluetooth.la
 
 src_devices_bluetooth_libnm_device_plugin_bluetooth_la_SOURCES = \
 	src/devices/bluetooth/nm-bluez-manager.c \
@@ -3221,10 +3231,6 @@ src_devices_bluetooth_libnm_device_plugin_bluetooth_la_SOURCES = \
 
 src_devices_bluetooth_libnm_device_plugin_bluetooth_la_CPPFLAGS = $(src_cppflags_device_plugin)
 
-src_devices_bluetooth_libnm_device_plugin_bluetooth_la_LDFLAGS = \
-	-module -avoid-version \
-	-Wl,--version-script="$(srcdir)/linker-script-devices.ver"
-
 src_devices_bluetooth_libnm_device_plugin_bluetooth_la_LIBADD = \
 	src/devices/wwan/libnm-wwan.la \
 	$(GLIB_LIBS)
@@ -3238,6 +3244,27 @@ src_devices_bluetooth_libnm_device_plugin_bluetooth_la_SOURCES += \
 
 src_devices_bluetooth_libnm_device_plugin_bluetooth_la_LIBADD += $(BLUEZ5_LIBS)
 endif
+
+if WITH_MODEM_MANAGER_1_BUILTIN
+
+src_libNetworkManager_la_SOURCES += \
+	$(src_devices_bluetooth_libnm_device_plugin_bluetooth_la_SOURCES)
+
+src_libNetworkManager_la_CPPFLAGS += \
+	$(src_devices_bluetooth_libnm_device_plugin_bluetooth_la_CPPFLAGS)
+
+src_libNetworkManager_la_LIBADD += \
+	$(BLUEZ5_LIBS)
+
+endif
+
+if WITH_MODEM_MANAGER_1
+
+core_plugins += src/devices/bluetooth/libnm-device-plugin-bluetooth.la
+
+src_devices_bluetooth_libnm_device_plugin_bluetooth_la_LDFLAGS = \
+	-module -avoid-version \
+	-Wl,--version-script="$(srcdir)/linker-script-devices.ver"
 
 check-local-devices-bluetooth: src/devices/bluetooth/libnm-device-plugin-bluetooth.la
 	$(srcdir)/tools/check-exports.sh $(builddir)/src/devices/bluetooth/.libs/libnm-device-plugin-bluetooth.so "$(srcdir)/linker-script-devices.ver"

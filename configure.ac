@@ -750,22 +750,32 @@ AC_ARG_WITH(modem-manager-1,
             AS_HELP_STRING([--with-modem-manager-1],
                            [Enable new ModemManager1 interface support]),
             [], [with_modem_manager_1=auto])
-if (test "${with_modem_manager_1}" != "no"); then
+
+if test "${with_modem_manager_1}" == "builtin"; then
+	AC_DEFINE(WITH_MODEM_MANAGER_1_BUILTIN, 1, [Define if ModemManager1 interface support is built in])
+else
+	AC_DEFINE(WITH_MODEM_MANAGER_1_BUILTIN, 0, [Define if ModemManager1 interface support is built in])
+fi
+
+if test "${with_modem_manager_1}" != "no"; then
 	PKG_CHECK_MODULES(MM_GLIB,
 	                  [mm-glib >= 0.7.991],
 	                  [have_libmm_glib=yes],
 	                  [have_libmm_glib=no])
 
-	if (test "${have_libmm_glib}" = "no"); then
-		if (test "${with_modem_manager_1}" = "yes"); then
+	if test "${have_libmm_glib}" = "no"; then
+		if test "${with_modem_manager_1}" != "auto"; then
 			AC_MSG_ERROR([Couldn't find libmm-glib])
 		else
 			with_modem_manager_1="no"
 		fi
 	else
-		with_modem_manager_1="yes"
+		if test "${with_modem_manager_1}" == "auto"; then
+			with_modem_manager_1="yes"
+		fi
 	fi
 fi
+AM_CONDITIONAL(WITH_MODEM_MANAGER_1_BUILTIN, test "${with_modem_manager_1}" = "builtin")
 AM_CONDITIONAL(WITH_MODEM_MANAGER_1, test "${with_modem_manager_1}" = "yes")
 
 # Bluez5 DUN support
