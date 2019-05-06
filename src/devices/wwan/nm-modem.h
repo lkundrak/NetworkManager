@@ -44,6 +44,7 @@
 #define NM_MODEM_IP_TYPES        "ip-types"   /* Supported IP types */
 #define NM_MODEM_SIM_OPERATOR_ID "sim-operator-id"
 #define NM_MODEM_OPERATOR_CODE   "operator-code"
+#define NM_MODEM_APN             "apn"
 
 /* Signals */
 #define NM_MODEM_PPP_STATS         "ppp-stats"
@@ -176,6 +177,7 @@ const char *nm_modem_get_sim_id          (NMModem *modem);
 const char *nm_modem_get_sim_operator_id (NMModem *modem);
 gboolean    nm_modem_get_iid             (NMModem *modem, NMUtilsIPv6IfaceId *out_iid);
 const char *nm_modem_get_operator_code   (NMModem *modem);
+const char *nm_modem_get_apn             (NMModem *modem);
 
 gboolean    nm_modem_set_data_port (NMModem *self,
                                     NMPlatform *platform,

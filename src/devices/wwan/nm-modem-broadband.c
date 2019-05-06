@@ -548,6 +548,10 @@ connect_context_step (NMModemBroadband *self)
 			else
 				g_assert_not_reached ();
 
+			g_object_set (G_OBJECT (self),
+			              NM_MODEM_APN, mm_simple_connect_properties_get_apn (ctx->connect_properties),
+			              NULL);
+
 			_LOGD ("launching connection with ip type '%s' (try %d)",
 			       nm_modem_ip_type_to_string (current),
 			       ctx->ip_type_tries + 1);
