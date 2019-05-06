@@ -36,12 +36,14 @@ G_DEFINE_TYPE (NMDeviceModem, nm_device_modem, NM_TYPE_DEVICE)
 typedef struct {
 	NMDeviceModemCapabilities caps;
 	NMDeviceModemCapabilities current_caps;
+	char *device_id;
 } NMDeviceModemPrivate;
 
 enum {
 	PROP_0,
 	PROP_MODEM_CAPS,
 	PROP_CURRENT_CAPS,
+	PROP_DEVICE_ID,
 	LAST_PROP
 };
 
@@ -80,6 +82,26 @@ nm_device_modem_get_current_capabilities (NMDeviceModem *self)
 	g_return_val_if_fail (NM_IS_DEVICE_MODEM (self), NM_DEVICE_MODEM_CAPABILITY_NONE);
 
 	return NM_DEVICE_MODEM_GET_PRIVATE (self)->current_caps;
+}
+
+/**
+ * nm_device_modem_get_device_id:
+ * @self: a #NMDeviceModem
+ *
+ * An identifier used by the modem backend (ModemManager) that aims to
+ * uniquely identify the a device. Can be used to match a connection to a
+ * particular device.
+ *
+ * Returns: a device-id string
+ *
+ * Since: 1.20
+ **/
+const char *
+nm_device_modem_get_device_id (NMDeviceModem *self)
+{
+	g_return_val_if_fail (NM_IS_DEVICE_MODEM (self), NULL);
+
+	return NM_DEVICE_MODEM_GET_PRIVATE (self)->device_id;
 }
 
 static const char *
@@ -164,6 +186,7 @@ init_dbus (NMObject *object)
 	const NMPropertiesInfo property_info[] = {
 		{ NM_DEVICE_MODEM_MODEM_CAPABILITIES,   &priv->caps },
 		{ NM_DEVICE_MODEM_CURRENT_CAPABILITIES, &priv->current_caps },
+		{ NM_DEVICE_MODEM_DEVICE_ID,            &priv->device_id },
 		{ NULL },
 	};
 
@@ -188,6 +211,9 @@ get_property (GObject *object,
 		break;
 	case PROP_CURRENT_CAPS:
 		g_value_set_flags (value, nm_device_modem_get_current_capabilities (self));
+		break;
+	case PROP_DEVICE_ID:
+		g_value_set_string (value, nm_device_modem_get_device_id (self));
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -242,4 +268,17 @@ nm_device_modem_class_init (NMDeviceModemClass *modem_class)
 		                     NM_DEVICE_MODEM_CAPABILITY_NONE,
 		                     G_PARAM_READABLE |
 		                     G_PARAM_STATIC_STRINGS));
+
+	/**
+	 * NMDeviceModem:device-id:
+	 *
+	 * Since: 1.20
+	 **/
+	g_object_class_install_property
+		(object_class, PROP_CURRENT_CAPS,
+		 g_param_spec_string (NM_DEVICE_MODEM_DEVICE_ID, "", "",
+		                     NULL,
+		                     G_PARAM_READABLE |
+		                     G_PARAM_STATIC_STRINGS));
+
 }
