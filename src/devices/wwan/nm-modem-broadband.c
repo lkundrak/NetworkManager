@@ -79,6 +79,7 @@ typedef struct {
 	MMObject *modem_object;
 	/* Per-interface objects */
 	MMModem *modem_iface;
+	MMModem3gpp *modem_3gpp_iface;
 	MMModemSimple *simple_iface;
 	MMSim *sim_iface;
 
@@ -1320,6 +1321,18 @@ supported_ip_families_changed (MMModem *modem, GParamSpec *pspec, gpointer user_
 	              NULL);
 }
 
+static void
+operator_code_changed (MMModem3gpp *modem_3gpp, GParamSpec *pspec, gpointer user_data)
+{
+	NMModemBroadband *self = NM_MODEM_BROADBAND (user_data);
+
+	g_return_if_fail (modem_3gpp == self->_priv.modem_3gpp_iface);
+
+	g_object_set (G_OBJECT (self),
+	              NM_MODEM_OPERATOR_CODE, mm_modem_3gpp_get_operator_code (modem_3gpp),
+	              NULL);
+}
+
 /*****************************************************************************/
 
 static void
@@ -1353,6 +1366,7 @@ set_property (GObject *object,
 		/* construct-only */
 		self->_priv.modem_object = g_value_dup_object (value);
 		self->_priv.modem_iface = mm_object_get_modem (self->_priv.modem_object);
+		self->_priv.modem_3gpp_iface = mm_object_get_modem_3gpp (self->_priv.modem_object);
 		g_assert (self->_priv.modem_iface != NULL);
 		g_signal_connect (self->_priv.modem_iface,
 		                  "state-changed",
@@ -1367,6 +1381,13 @@ set_property (GObject *object,
 		                  "notify::supported-ip-families",
 		                  G_CALLBACK (supported_ip_families_changed),
 		                  self);
+
+		if (self->_priv.modem_3gpp_iface) {
+			g_signal_connect (self->_priv.modem_3gpp_iface,
+			                  "notify::operator-code",
+			                  G_CALLBACK (operator_code_changed),
+			                  self);
+		}
 
 		/* Note: don't grab the Simple iface here; the Modem interface is the
 		 * only one assumed to be always valid and available */
@@ -1389,7 +1410,9 @@ nm_modem_broadband_new (GObject *object, GError **error)
 {
 	MMObject *modem_object;
 	MMModem *modem_iface;
+	MMModem3gpp *modem_3gpp_iface;
 	const char *const*drivers;
+	const char *operator_code = NULL;
 	gs_free char *driver = NULL;
 
 	g_return_val_if_fail (MM_IS_OBJECT (object), NULL);
@@ -1405,6 +1428,10 @@ nm_modem_broadband_new (GObject *object, GError **error)
 	if (drivers)
 		driver = g_strjoinv (", ", (char **) drivers);
 
+	modem_3gpp_iface = mm_object_peek_modem_3gpp (modem_object);
+	if (modem_3gpp_iface)
+		operator_code = mm_modem_3gpp_get_operator_code (modem_3gpp_iface);
+
 	return g_object_new (NM_TYPE_MODEM_BROADBAND,
 	                     NM_MODEM_PATH, mm_object_get_path (modem_object),
 	                     NM_MODEM_UID, mm_modem_get_primary_port (modem_iface),
@@ -1414,6 +1441,7 @@ nm_modem_broadband_new (GObject *object, GError **error)
 	                     NM_MODEM_DEVICE_ID, mm_modem_get_device_identifier (modem_iface),
 	                     NM_MODEM_BROADBAND_MODEM, modem_object,
 	                     NM_MODEM_DRIVER, driver,
+	                     NM_MODEM_OPERATOR_CODE, operator_code,
 	                     NULL);
 }
 
@@ -1431,6 +1459,7 @@ dispose (GObject *object)
 	g_clear_object (&self->_priv.ipv6_config);
 	g_clear_object (&self->_priv.bearer);
 	g_clear_object (&self->_priv.modem_iface);
+	g_clear_object (&self->_priv.modem_3gpp_iface);
 	g_clear_object (&self->_priv.simple_iface);
 	g_clear_object (&self->_priv.sim_iface);
 	g_clear_object (&self->_priv.modem_object);

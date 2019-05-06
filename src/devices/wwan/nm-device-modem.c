@@ -41,6 +41,7 @@ NM_GOBJECT_PROPERTIES_DEFINE_BASE (
 	PROP_CAPABILITIES,
 	PROP_CURRENT_CAPABILITIES,
 	PROP_DEVICE_ID,
+	PROP_OPERATOR_CODE,
 );
 
 typedef struct {
@@ -49,6 +50,7 @@ typedef struct {
 	NMDeviceModemCapabilities current_caps;
 	gboolean rf_enabled;
 	const char *device_id;
+	const char *operator_code;
 } NMDeviceModemPrivate;
 
 struct _NMDeviceModem {
@@ -307,6 +309,14 @@ ip_ifindex_changed_cb (NMModem *modem, GParamSpec *pspec, gpointer user_data)
 	 * RA handling code to run before NM is ready.
 	 */
 	nm_device_sysctl_ip_conf_set (device, AF_INET6, "disable_ipv6", "1");
+}
+
+static void
+operator_code_changed_cb (NMModem *modem, GParamSpec *pspec, gpointer user_data)
+{
+	g_object_set (user_data,
+	              NM_DEVICE_MODEM_OPERATOR_CODE, nm_modem_get_operator_code (modem),
+	              NULL);
 }
 
 static void
@@ -690,6 +700,7 @@ set_modem (NMDeviceModem *self, NMModem *modem)
 	g_signal_connect (modem, "notify::" NM_MODEM_DEVICE_ID, G_CALLBACK (ids_changed_cb), self);
 	g_signal_connect (modem, "notify::" NM_MODEM_SIM_ID, G_CALLBACK (ids_changed_cb), self);
 	g_signal_connect (modem, "notify::" NM_MODEM_SIM_OPERATOR_ID, G_CALLBACK (ids_changed_cb), self);
+	g_signal_connect (modem, "notify::" NM_MODEM_OPERATOR_CODE, G_CALLBACK (operator_code_changed_cb), self);
 }
 
 static guint32
@@ -723,6 +734,9 @@ get_property (GObject *object, guint prop_id,
 	case PROP_DEVICE_ID:
 		g_value_set_string (value, priv->device_id);
 		break;
+	case PROP_OPERATOR_CODE:
+		g_value_set_string (value, priv->operator_code);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -749,6 +763,10 @@ set_property (GObject *object, guint prop_id,
 	case PROP_DEVICE_ID:
 		/* construct-only */
                 priv->device_id = g_value_dup_string (value);
+		break;
+	case PROP_OPERATOR_CODE:
+		g_clear_pointer (&priv->operator_code, g_free);
+                priv->operator_code = g_value_dup_string (value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -799,6 +817,7 @@ dispose (GObject *object)
 	}
 
 	g_clear_pointer (&priv->device_id, g_free);
+	g_clear_pointer (&priv->operator_code, g_free);
 
 	G_OBJECT_CLASS (nm_device_modem_parent_class)->dispose (object);
 }
@@ -813,6 +832,7 @@ static const NMDBusInterfaceInfoExtended interface_info_device_modem = {
 			NM_DEFINE_DBUS_PROPERTY_INFO_EXTENDED_READABLE_L ("ModemCapabilities",   "u",  NM_DEVICE_MODEM_CAPABILITIES),
 			NM_DEFINE_DBUS_PROPERTY_INFO_EXTENDED_READABLE_L ("CurrentCapabilities", "u",  NM_DEVICE_MODEM_CURRENT_CAPABILITIES),
 			NM_DEFINE_DBUS_PROPERTY_INFO_EXTENDED_READABLE   ("DeviceId",            "s",  NM_DEVICE_MODEM_DEVICE_ID),
+			NM_DEFINE_DBUS_PROPERTY_INFO_EXTENDED_READABLE   ("OperatorCode",        "s",  NM_DEVICE_MODEM_OPERATOR_CODE),
 		),
 	),
 	.legacy_property_changed = TRUE,
@@ -874,6 +894,12 @@ nm_device_modem_class_init (NMDeviceModemClass *klass)
 	     g_param_spec_string (NM_DEVICE_MODEM_DEVICE_ID, "", "",
 	                          NULL,
 	                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+	                          G_PARAM_STATIC_STRINGS);
+
+	obj_properties[PROP_OPERATOR_CODE] =
+	     g_param_spec_string (NM_DEVICE_MODEM_OPERATOR_CODE, "", "",
+	                          NULL,
+	                          G_PARAM_READWRITE |
 	                          G_PARAM_STATIC_STRINGS);
 
 	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);

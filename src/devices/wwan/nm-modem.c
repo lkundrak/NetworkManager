@@ -52,6 +52,7 @@ NM_GOBJECT_PROPERTIES_DEFINE (NMModem,
 	PROP_SIM_ID,
 	PROP_IP_TYPES,
 	PROP_SIM_OPERATOR_ID,
+	PROP_OPERATOR_CODE,
 );
 
 enum {
@@ -90,6 +91,7 @@ typedef struct _NMModemPrivate {
 	char *sim_id;
 	NMModemIPType ip_types;
 	char *sim_operator_id;
+	char *operator_code;
 
 	NMPPPManager *ppp_manager;
 
@@ -434,6 +436,12 @@ const char *
 nm_modem_get_sim_operator_id (NMModem *self)
 {
 	return NM_MODEM_GET_PRIVATE (self)->sim_operator_id;
+}
+
+const char *
+nm_modem_get_operator_code (NMModem *self)
+{
+	return NM_MODEM_GET_PRIVATE (self)->operator_code;
 }
 
 /*****************************************************************************/
@@ -1614,6 +1622,9 @@ get_property (GObject *object, guint prop_id,
 	case PROP_SIM_OPERATOR_ID:
 		g_value_set_string (value, priv->sim_operator_id);
 		break;
+	case PROP_OPERATOR_CODE:
+		g_value_set_string (value, priv->operator_code);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -1665,6 +1676,10 @@ set_property (GObject *object, guint prop_id,
 		s = g_value_get_string (value);
 		if (s && s[0])
 			priv->sim_operator_id = g_strdup (s);
+		break;
+	case PROP_OPERATOR_CODE:
+		g_clear_pointer (&priv->operator_code, g_free);
+		priv->operator_code = g_value_dup_string (value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1727,6 +1742,7 @@ finalize (GObject *object)
 	g_free (priv->device_id);
 	g_free (priv->sim_id);
 	g_free (priv->sim_operator_id);
+	g_free (priv->operator_code);
 
 	G_OBJECT_CLASS (nm_modem_parent_class)->finalize (object);
 }
@@ -1808,6 +1824,12 @@ nm_modem_class_init (NMModemClass *klass)
 	     g_param_spec_string (NM_MODEM_SIM_OPERATOR_ID, "", "",
 	                          NULL,
 	                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT |
+	                          G_PARAM_STATIC_STRINGS);
+
+	obj_properties[PROP_OPERATOR_CODE] =
+	     g_param_spec_string (NM_MODEM_OPERATOR_CODE, "", "",
+	                          NULL,
+	                          G_PARAM_READWRITE |
 	                          G_PARAM_STATIC_STRINGS);
 
 	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
