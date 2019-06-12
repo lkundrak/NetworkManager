@@ -3541,6 +3541,30 @@ endif
 
 core_plugins += src/devices/ovs/libnm-device-plugin-ovs.la
 
+check_programs_norun += \
+	src/devices/ovs/test-ovsdb \
+	$(NULL)
+
+src_devices_ovs_test_ovsdb_SOURCES = \
+	src/devices/ovs/nm-ovsdb.c \
+	src/devices/ovs/nm-ovsdb.h \
+	src/devices/ovs/test-ovsdb.c \
+	$(NULL)
+
+src_devices_ovs_test_ovsdb_CPPFLAGS = \
+	-DNM_MORE_LOGGING \
+	$(src_cppflags) \
+	$(JANSSON_CFLAGS) \
+	$(NULL)
+
+src_devices_ovs_test_ovsdb_LDADD = \
+	src/libNetworkManager.la \
+	$(JANSSON_LIBS) \
+	$(GLIB_LIBS) \
+	$(NULL)
+
+$(src_devices_ovs_test_ovsdb_OBJECTS): $(libnm_core_lib_h_pub_mkenums)
+
 src_devices_ovs_libnm_device_plugin_ovs_la_SOURCES = \
 	src/devices/ovs/nm-ovsdb.c \
 	src/devices/ovs/nm-ovsdb.h \
