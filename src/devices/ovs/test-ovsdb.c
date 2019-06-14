@@ -5,6 +5,7 @@
 #include "nm-setting-ovs-bridge.h"
 #include "nm-setting-ovs-port.h"
 #include "nm-setting-ovs-interface.h"
+#include "nm-setting-ovs-patch.h"
 #include "nm-setting-ovs-dpdk.h"
 #include "nm-ovsdb.h"
 
@@ -101,7 +102,11 @@ deleted_1 (GError *error, gpointer user_data)
 	                      NULL));
 	nm_connection_add_setting (interface,
 		g_object_new (NM_TYPE_SETTING_OVS_INTERFACE,
-	                      NM_SETTING_OVS_INTERFACE_TYPE, "dpdk",
+	//                      NM_SETTING_OVS_INTERFACE_TYPE, "dpdk",
+	                      NULL));
+	nm_connection_add_setting (interface,
+		g_object_new (NM_TYPE_SETTING_OVS_PATCH,
+	                      NM_SETTING_OVS_PATCH_PEER, "1.2.3.4",
 	                      NULL));
 	nm_connection_add_setting (interface,
 		g_object_new (NM_TYPE_SETTING_OVS_DPDK,
