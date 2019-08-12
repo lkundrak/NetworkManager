@@ -75,3 +75,7 @@ check-local-devices-wwan: src/devices/wwan/libnm-device-plugin-wwan.la src/devic
   $(srcdir)/tools/check-exports.sh $(builddir)/src/devices/wwan/.libs/libnm-wwan.so "$(srcdir)/src/devices/wwan/libnm-wwan.ver"
   $(call check_so_symbols,$(builddir)/src/devices/wwan/.libs/libnm-wwan.so)
 '''
+
+if enable_tests
+  subdir('tests')
+endif
