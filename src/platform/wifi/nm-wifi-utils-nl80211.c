@@ -934,6 +934,8 @@ wifi_nl80211_get_mesh_channel (NMWifiUtils *data)
 		return 0;
 	}
 
+g_printerr ("XXX GET MESH FREQ %d (%d)\n", device_info.freq, nm_wifi_utils_get_freq (data));
+
 	//freq = nm_wifi_utils_get_freq (data);
 	for (i = 0; i < self->num_freqs; i++) {
 		if (device_info.freq == self->freqs[i])
@@ -949,8 +951,12 @@ wifi_nl80211_set_mesh_channel (NMWifiUtils *data, guint32 channel)
 	nm_auto_nlmsg struct nl_msg *msg = NULL;
 	int err;
 
+g_printerr ("XXX SET MESH CHANNEL %d\n", channel);
+
 	if (channel > self->num_freqs)
 		return FALSE;
+
+g_printerr ("XXX SET MESH CHANNEL %d FREQ %d\n", channel, self->freqs[channel - 1]);
 
         msg = nl80211_alloc_msg (self, NL80211_CMD_SET_WIPHY, 0);
 	NLA_PUT_U32 (msg, NL80211_ATTR_WIPHY_FREQ, self->freqs[channel - 1]);
