@@ -170,17 +170,28 @@ act_stage1_prepare (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 	return NM_ACT_STAGE_RETURN_SUCCESS;
 }
 
-static void
+static gboolean
 _mesh_set_channel (NMDeviceOlpcMesh *self, guint32 channel)
 {
 	NMPlatform *platform;
 	int ifindex = nm_device_get_ifindex (NM_DEVICE (self));
+	guint32 old_channel;
 
 	platform = nm_device_get_platform (NM_DEVICE (self));
-	if (nm_platform_mesh_get_channel (platform, ifindex) != channel) {
-		if (nm_platform_mesh_set_channel (platform, ifindex, channel))
-			_notify (self, PROP_ACTIVE_CHANNEL);
-	}
+	old_channel = nm_platform_mesh_get_channel (platform, ifindex);
+
+	if (channel == 0)
+		channel = old_channel;
+
+	/* We want to call this even if the channel number is the same,
+	 * because that actually starts the mesh with the configured mesh ID. */
+	if (!nm_platform_mesh_set_channel (platform, ifindex, channel))
+		return FALSE;
+
+	if (old_channel != channel)
+		_notify (self, PROP_ACTIVE_CHANNEL);
+
+	return TRUE;
 }
 
 static NMActStageReturn
@@ -188,7 +199,6 @@ act_stage2_config (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 {
 	NMDeviceOlpcMesh *self = NM_DEVICE_OLPC_MESH (device);
 	NMSettingOlpcMesh *s_mesh;
-	guint32 channel;
 	GBytes *ssid;
 	const char *anycast_addr;
 
@@ -208,9 +218,10 @@ act_stage2_config (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 	anycast_addr = nm_setting_olpc_mesh_get_dhcp_anycast_address (s_mesh);
 	nm_device_set_dhcp_anycast_address (device, anycast_addr);
 
-	channel = nm_setting_olpc_mesh_get_channel (s_mesh);
-	if (channel != 0)
-		_mesh_set_channel (self, channel);
+	if (!_mesh_set_channel (self, nm_setting_olpc_mesh_get_channel (s_mesh))) {
+		_LOGW (LOGD_WIFI, "Unable to set the mesh channel");
+		return NM_ACT_STAGE_RETURN_FAILURE;
+	}
 
 
 	return NM_ACT_STAGE_RETURN_SUCCESS;
