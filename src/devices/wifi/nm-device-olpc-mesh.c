@@ -196,18 +196,22 @@ act_stage2_config (NMDevice *device, NMDeviceStateReason *out_failure_reason)
 
 	g_return_val_if_fail (s_mesh, NM_ACT_STAGE_RETURN_FAILURE);
 
+	ssid = nm_setting_olpc_mesh_get_ssid (s_mesh);
+	if (!nm_platform_mesh_set_ssid (nm_device_get_platform (device),
+	                                nm_device_get_ifindex (device),
+	                                g_bytes_get_data (ssid, NULL),
+	                                g_bytes_get_size (ssid))) {
+		_LOGW (LOGD_WIFI, "Unable to set the mesh ID");
+		return NM_ACT_STAGE_RETURN_FAILURE;
+	}
+
+	anycast_addr = nm_setting_olpc_mesh_get_dhcp_anycast_address (s_mesh);
+	nm_device_set_dhcp_anycast_address (device, anycast_addr);
+
 	channel = nm_setting_olpc_mesh_get_channel (s_mesh);
 	if (channel != 0)
 		_mesh_set_channel (self, channel);
 
-	ssid = nm_setting_olpc_mesh_get_ssid (s_mesh);
-	nm_platform_mesh_set_ssid (nm_device_get_platform (device),
-	                           nm_device_get_ifindex (device),
-	                           g_bytes_get_data (ssid, NULL),
-	                           g_bytes_get_size (ssid));
-
-	anycast_addr = nm_setting_olpc_mesh_get_dhcp_anycast_address (s_mesh);
-	nm_device_set_dhcp_anycast_address (device, anycast_addr);
 
 	return NM_ACT_STAGE_RETURN_SUCCESS;
 }
