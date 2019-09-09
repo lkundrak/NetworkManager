@@ -276,32 +276,16 @@ create_cdma_connect_properties (NMConnection *connection)
 
 static MMSimpleConnectProperties *
 create_gsm_connect_properties (NMConnection *connection,
-                               const char *default_apn,
-                               const char *default_username,
-                               const char *default_password)
+                               const char *apn,
+                               const char *username,
+                               const char *password)
 {
 	NMSettingGsm *setting;
 	NMSettingPpp *s_ppp;
 	MMSimpleConnectProperties *properties;
-	const char *apn;
-	const char *username;
-	const char *password;
 	const char *str;
 
 	setting = nm_connection_get_setting_gsm (connection);
-
-	apn = nm_setting_gsm_get_apn (setting);
-	username = nm_setting_gsm_get_username (setting);
-	password = nm_setting_gsm_get_password (setting);
-
-	if (!apn && !username && !password) {
-		apn = default_apn;
-		username = default_username;
-		password = default_password;
-	}
-
-	if (!apn && !username && !password)
-		return NULL;
 
 	properties = mm_simple_connect_properties_new ();
 
@@ -495,8 +479,10 @@ find_gsm_apn_cb (const char *apn,
 	}
 
 	/* Blank APN ("") means the default subscription APN */
-	ctx->connect_properties = create_gsm_connect_properties (ctx->connection, apn ?: "",
-	                                                         username, password);
+	ctx->connect_properties = create_gsm_connect_properties (ctx->connection,
+	                                                         apn,
+	                                                         username,
+	                                                         password);
 	g_return_if_fail (ctx->connect_properties);
 	connect_context_step (self);
 }
@@ -508,11 +494,10 @@ try_create_connect_properties (NMModemBroadband *self)
 	ConnectContext *ctx = priv->ctx;
 
 	if (MODEM_CAPS_3GPP (ctx->caps)) {
-		ctx->connect_properties = create_gsm_connect_properties (ctx->connection,
-		                                                         NULL, NULL, NULL);
-		if (!ctx->connect_properties) {
+		NMSettingGsm *s_gsm = nm_connection_get_setting_gsm (ctx->connection);
+
+		if (!s_gsm || nm_setting_gsm_get_auto_config (s_gsm)) {
 			gs_unref_object MMModem3gpp *modem_3gpp = NULL;
-			NMSettingGsm *s_gsm;
 			const char *network_id = NULL;
 
 			s_gsm = nm_connection_get_setting_gsm (ctx->connection);
@@ -535,7 +520,14 @@ try_create_connect_properties (NMModemBroadband *self)
 			                                   ctx->cancellable,
 			                                   find_gsm_apn_cb,
 			                                   self);
+		} else {
+			ctx->connect_properties = create_gsm_connect_properties (ctx->connection,
+			                                                         nm_setting_gsm_get_apn (s_gsm),
+			                                                         nm_setting_gsm_get_username (s_gsm),
+			                                                         nm_setting_gsm_get_password (s_gsm));
+			g_return_val_if_fail (ctx->connect_properties, TRUE);
 		}
+
 		return TRUE;
 	} else if (MODEM_CAPS_3GPP2 (ctx->caps)) {
 		ctx->connect_properties = create_cdma_connect_properties (ctx->connection);
@@ -774,6 +766,9 @@ complete_connection (NMModem *modem,
 		if (!s_gsm) {
 			s_gsm = (NMSettingGsm *) nm_setting_gsm_new ();
 			nm_connection_add_setting (connection, NM_SETTING (s_gsm));
+			g_object_set (G_OBJECT (s_gsm),
+			              NM_SETTING_GSM_AUTO_CONFIG, TRUE,
+			              NULL);
 		}
 
 		if (!nm_setting_gsm_get_device_id (s_gsm)) {
