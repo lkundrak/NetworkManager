@@ -4059,11 +4059,122 @@ finish:
 	return nmc->return_value;
 }
 
+static gboolean
+wifi_show_device (NMDevice *device, GError **error)
+{
+	NMActiveConnection *active_conn;
+	gs_unref_object NMConnection *connection = NULL;
+	gs_unref_variant GVariant *secrets = NULL;
+
+	if (!NM_IS_DEVICE_WIFI (device)) {
+		g_set_error (error, NMCLI_ERROR, 0,
+		             _("Error: Device '%s' is not a Wi-Fi device."),
+		             nm_device_get_iface (device));
+		return FALSE;
+	}
+
+	connection = nm_device_get_applied_connection (device, 0, NULL, NULL, error);
+	if (!connection)
+		return FALSE;
+
+	active_conn = nm_device_get_active_connection (device);
+	if (!active_conn) {
+		g_set_error (error, NMCLI_ERROR, 0,
+		             _("no active connection on device '%s'"),
+		             nm_device_get_iface (device));
+		return FALSE;
+	}
+
+	secrets = nm_remote_connection_get_secrets (nm_active_connection_get_connection (active_conn),
+	                                            NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+	                                            NULL,
+	                                            error);
+	if (secrets && !nm_connection_update_secrets (connection,
+	                                              NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+	                                              secrets,
+	                                              error)) {
+		return FALSE;
+	}
+
+	nm_connection_dump (connection);
+	return TRUE;
+}
+
+static NMCResultCode
+do_device_wifi_show (NmCli *nmc, int argc, char **argv)
+{
+	const char *ifname = NULL;
+	gs_free NMDevice **devices = NULL;
+	gs_free_error GError *error = NULL;
+	gboolean found = FALSE;
+	int i;
+
+	devices = nmc_get_devices_sorted (nmc->client);
+
+	next_arg (nmc, &argc, &argv, NULL);
+	/* Get the parameters */
+	while (argc > 0) {
+		if (argc == 1 && nmc->complete)
+			nmc_complete_strings (*argv, "ifname");
+
+		if (strcmp (*argv, "ifname") == 0) {
+			if (ifname) {
+				g_string_printf (nmc->return_text, _("Error: '%s' cannot repeat."), *(argv-1));
+				return NMC_RESULT_ERROR_USER_INPUT;
+			}
+			argc--;
+			argv++;
+			if (!argc) {
+				g_string_printf (nmc->return_text, _("Error: %s argument is missing."), *(argv-1));
+				return NMC_RESULT_ERROR_USER_INPUT;
+			}
+			ifname = *argv;
+			if (argc == 1 && nmc->complete)
+				complete_device (devices, ifname, TRUE);
+		} else if (!nmc->complete) {
+			g_string_printf (nmc->return_text, _("Error: invalid extra argument '%s'."), *argv);
+			return NMC_RESULT_ERROR_USER_INPUT;
+		}
+
+		next_arg (nmc, &argc, &argv, NULL);
+	}
+
+	if (nmc->complete)
+		return nmc->return_value;
+
+	for (i = 0; devices[i]; i++) {
+		if (ifname && g_strcmp0 (nm_device_get_iface (devices[i]), ifname) != 0)
+			continue;
+
+		if (wifi_show_device (devices[i], &error)) {
+			found = TRUE;
+		} else {
+			if (ifname) {
+				g_string_printf (nmc->return_text, _("%s"), error->message);
+				return NMC_RESULT_ERROR_UNKNOWN;
+			}
+			g_clear_error (&error);
+		}
+
+		if (ifname)
+			break;
+	}
+
+	if (!found) {
+		g_string_printf (nmc->return_text, _("Error: No Wi-Fi device found."));
+		return NMC_RESULT_ERROR_UNKNOWN;
+	}
+
+	return nmc->return_value;
+}
+
+
 static NMCCommand device_wifi_cmds[] = {
 	{ "list",     do_device_wifi_list,     NULL,  TRUE,  TRUE },
 	{ "connect",  do_device_wifi_connect,  NULL,  TRUE,  TRUE },
 	{ "hotspot",  do_device_wifi_hotspot,  NULL,  TRUE,  TRUE },
 	{ "rescan",   do_device_wifi_rescan,   NULL,  TRUE,  TRUE },
+	{ "show",     do_device_wifi_show,     NULL,  TRUE,  TRUE },
 	{ NULL,       do_device_wifi_list,     NULL,  TRUE,  TRUE },
 };
 
