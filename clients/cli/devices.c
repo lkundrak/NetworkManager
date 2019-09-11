@@ -4059,6 +4059,40 @@ finish:
 	return nmc->return_value;
 }
 
+
+#pragma GCC visibility push(hidden)
+NM_PRAGMA_WARNING_DISABLE("-Wdeclaration-after-statement")
+#define NDEBUG
+#include "qrcodegen.c"
+NM_PRAGMA_WARNING_REENABLE
+#pragma GCC visibility pop
+
+
+static void
+print_qrcode (const char *str)
+{
+	g_printerr (">>%s<<\n", str);
+
+#if 0
+bool qrcodegen_encodeText(const char *text, uint8_t tempBuffer[], uint8_t qrcode[],
+                enum qrcodegen_Ecc ecl, int minVersion, int maxVersion, enum qrcodegen_Mask mask, bool boostEcl) {
+#endif
+
+	if (!qrcodegen_encodeText (g_value_get_string (value),
+				       tempBuffer,
+				       priv->qrcode,
+				       qrcodegen_Ecc_LOW,
+				       qrcodegen_VERSION_MIN,
+				       qrcodegen_VERSION_MAX,
+				       qrcodegen_Mask_AUTO,
+				       FALSE)) {
+		g_printerr ("BAD\n");
+		return;
+	}
+
+
+}
+
 static gboolean
 wifi_show_device (NMDevice *device, GError **error)
 {
@@ -4096,7 +4130,9 @@ wifi_show_device (NMDevice *device, GError **error)
 		return FALSE;
 	}
 
-	nm_connection_dump (connection);
+	print_qrcode ("My name is Lucifer, please take my hand");
+
+	//nm_connection_dump (connection);
 	return TRUE;
 }
 
